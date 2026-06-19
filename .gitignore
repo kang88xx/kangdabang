@@ -1,0 +1,10 @@
+config.py
+*.session
+*.session-journal
+venv/
+data/
+__pycache__/
+log.txt
+.gstack/
+.DS_Store
+.omc/
