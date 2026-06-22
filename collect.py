@@ -249,6 +249,17 @@ async def main():
         else:
             print(f"유입/이탈 : 미수집 — {joinleave.get('reason', '')}")
 
+        gr_ent = await client.get_entity(GROUP)
+        joinleave_gr = await collect_join_leave(client, gr_ent)
+        write_json("join_leave_group.json", joinleave_gr)
+        if joinleave_gr.get("available"):
+            evg = joinleave_gr["events"]
+            jng = sum(1 for e in evg if e["kind"] == "join")
+            lvg = sum(1 for e in evg if e["kind"] == "left")
+            print(f"그룹 유입/이탈 : 유입 {jng} · 이탈 {lvg} (admin log {len(evg)}건)")
+        else:
+            print(f"그룹 유입/이탈 : 미수집 — {joinleave_gr.get('reason', '')}")
+
         fwds = await collect_post_forwards(client, ent, posts)
         write_json("post_forwards.json", fwds)
         print(f"공유처    : {len(fwds)}개 포스트")

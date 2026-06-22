@@ -423,6 +423,15 @@ TEMPLATE = r"""<!DOCTYPE html>
       <div id="topMembers"></div>
     </section>
 
+    <!-- 07 GROUP 유입·이탈 인원 -->
+    <section id="sec-group-jl">
+      <div class="sec-head group-head">
+        <div><div class="eyebrow">Group · Members</div><h2>그룹 — 유입 · 이탈 인원</h2></div>
+        <span class="dtag gr">@__GRUSER__</span>
+      </div>
+      <div id="joinLeaveGroup"></div>
+    </section>
+
 
 
   </main>
@@ -452,6 +461,7 @@ const MEMBERS  = __MEMBERS__;
 
 const FWDS     = __FWDS__;     // { msg_id: {count, ext_views, channels:[{title,views}]} }
 const JOINLEAVE= __JOINLEAVE__;  // { available, events:[{date,kind,name,username,id}] }
+const JOINLEAVE_GR = __JOINLEAVE_GR__;  // 그룹 유입·이탈
 const CH_USER  = "__CHUSER__";
 
 const fmt  = n => Number(n).toLocaleString('ko-KR');
@@ -737,42 +747,50 @@ function originGuess(s){
   for(const [re,label] of tests){ if(re.test(s)) return label; }
   return '기타 / 이모지';
 }
-(function(){
-  const box = document.getElementById('joinLeave');
-  const jl = (JOINLEAVE && JOINLEAVE.available) ? (JOINLEAVE.events || []) : null;
+function kstShort(iso){
+  if(!iso) return '—';
+  const d = new Date(new Date(iso).getTime() + 9*3600*1000);  // KST 표시
+  const p = n => String(n).padStart(2,'0');
+  return `${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+}
+function renderJoinLeave(box, src){
+  if(!box) return;
+  const jl = (src && src.available) ? (src.events || []) : null;
   if (jl && jl.length){
     const jn = jl.filter(e=>e.kind==='join').length;
     const lv = jl.filter(e=>e.kind==='left').length;
     box.innerHTML = `
-      <div class="tabs" id="jlTabs">
+      <div class="tabs">
         <button class="tab active" data-f="all">전체 ${jl.length}</button>
         <button class="tab" data-f="join">유입 ${jn}</button>
         <button class="tab" data-f="left">이탈 ${lv}</button>
       </div>
-      <div class="table-wrap"><table><thead><tr><th class="l">구분</th><th class="l">멤버</th><th class="l">추정 출신</th><th>시각</th></tr></thead><tbody id="jlBody"></tbody></table></div>
-      <div class="pager" id="jlPager"></div>`;
-    const body = document.getElementById('jlBody'), pager = document.getElementById('jlPager');
+      <div class="table-wrap"><table><thead><tr><th class="l">구분</th><th class="l">멤버</th><th class="l">추정 출신</th><th>시각</th></tr></thead><tbody></tbody></table></div>
+      <div class="pager"></div>`;
+    const tabs = box.querySelector('.tabs');
+    const body = box.querySelector('tbody'), pager = box.querySelector('.pager');
     const rowFn = e => {
       const tag = e.kind==='join' ? `<span class="jl-tag join">유입</span>` : `<span class="jl-tag left">이탈</span>`;
       const uname = e.username ? ` <span style="color:var(--ink-300);">@${esc(e.username)}</span>` : '';
-      const dt = e.date ? (e.date.slice(5,10)+' '+e.date.slice(11,16)) : '—';
       const origin = `<span style="color:var(--ink-500);font-size:12px;">${esc(originGuess(e.name))}</span>`;
-      return `<tr><td class="l">${tag}</td><td class="l">${esc(e.name||('user '+e.id))}${uname}</td><td class="l">${origin}</td><td>${dt}</td></tr>`;
+      return `<tr><td class="l">${tag}</td><td class="l">${esc(e.name||('user '+e.id))}${uname}</td><td class="l">${origin}</td><td>${kstShort(e.date)}</td></tr>`;
     };
     function apply(f){ paginate(body, pager, f==='all'?jl:jl.filter(e=>e.kind===f), 10, rowFn); }
-    document.getElementById('jlTabs').addEventListener('click', ev=>{
+    tabs.addEventListener('click', ev=>{
       const t = ev.target.closest('.tab'); if(!t) return;
-      document.querySelectorAll('#jlTabs .tab').forEach(x=>x.classList.toggle('active', x===t));
+      tabs.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x===t));
       apply(t.dataset.f);
     });
     apply('all');
   } else {
-    const reason = (JOINLEAVE && JOINLEAVE.reason) ? esc(JOINLEAVE.reason)
-      : 'collect.py가 admin log(채널 관리자 권한)에서 유입·이탈 이벤트를 수집하면 표시됩니다.';
+    const reason = (src && src.reason) ? esc(src.reason)
+      : 'collect.py가 admin log(관리자 권한)에서 유입·이탈 이벤트를 수집하면 표시됩니다. (그룹은 공개링크 가입이 로그에 안 남을 수 있음)';
     box.innerHTML = `<div class="empty"><div class="tag">No join/leave log</div>
       <b>유입·이탈 인원 데이터 없음</b><br>${reason}</div>`;
   }
-})();
+}
+renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
+renderJoinLeave(document.getElementById('joinLeaveGroup'), JOINLEAVE_GR);
 
 // ---------- 06 활발한 멤버 (10명씩 페이지네이션) ----------
 (function(){
@@ -854,6 +872,7 @@ def main():
 
     fwds = load_json("post_forwards.json", {})
     joinleave = load_json("join_leave.json", {"available": False})
+    joinleave_gr = load_json("join_leave_group.json", {"available": False})
 
 
 
@@ -870,7 +889,8 @@ def main():
             .replace("__OFFICIAL__", json.dumps(official, ensure_ascii=False))
             .replace("__MEMBERS__", json.dumps(members, ensure_ascii=False))
             .replace("__FWDS__", json.dumps(fwds, ensure_ascii=False))
-            .replace("__JOINLEAVE__", json.dumps(joinleave, ensure_ascii=False)))
+            .replace("__JOINLEAVE__", json.dumps(joinleave, ensure_ascii=False))
+            .replace("__JOINLEAVE_GR__", json.dumps(joinleave_gr, ensure_ascii=False)))
 
     OUT.write_text(html, encoding="utf-8")
     print(f"대시보드 생성 완료 → {OUT}")
