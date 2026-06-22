@@ -730,23 +730,6 @@ function paginate(bodyEl, pagerEl, items, pageSize, rowFn){
 }
 
 // ---------- 02b 유입 · 이탈 인원 (누가) ----------
-// 이름의 문자(스크립트)로 출신을 '추정'한다. 텔레그램 API는 국적/전화번호를 주지 않으므로 어디까지나 추정값.
-function originGuess(s){
-  if(!s) return '—';
-  const tests = [
-    [/[\u0590-\u05FF]/, '히브리어 (이스라엘 추정)'],
-    [/[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF]/, '아랍어'],
-    [/[\u0400-\u04FF]/, '키릴 (러시아·동유럽 추정)'],
-    [/[\uAC00-\uD7A3\u1100-\u11FF]/, '한국어'],
-    [/[\u3040-\u30FF]/, '일본어'],
-    [/[\u4E00-\u9FFF]/, '중국어'],
-    [/[\u0E00-\u0E7F]/, '태국어'],
-    [/[\u0900-\u097F]/, '데바나가리 (인도 추정)'],
-    [/[A-Za-z]/, '라틴 문자'],
-  ];
-  for(const [re,label] of tests){ if(re.test(s)) return label; }
-  return '기타 / 이모지';
-}
 function kstShort(iso){
   if(!iso) return '—';
   const d = new Date(new Date(iso).getTime() + 9*3600*1000);  // KST 표시
@@ -765,15 +748,14 @@ function renderJoinLeave(box, src){
         <button class="tab" data-f="join">유입 ${jn}</button>
         <button class="tab" data-f="left">이탈 ${lv}</button>
       </div>
-      <div class="table-wrap"><table><thead><tr><th class="l">구분</th><th class="l">멤버</th><th class="l">추정 출신</th><th>시각</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th class="l">구분</th><th class="l">멤버</th><th>시각</th></tr></thead><tbody></tbody></table></div>
       <div class="pager"></div>`;
     const tabs = box.querySelector('.tabs');
     const body = box.querySelector('tbody'), pager = box.querySelector('.pager');
     const rowFn = e => {
       const tag = e.kind==='join' ? `<span class="jl-tag join">유입</span>` : `<span class="jl-tag left">이탈</span>`;
       const uname = e.username ? ` <span style="color:var(--ink-300);">@${esc(e.username)}</span>` : '';
-      const origin = `<span style="color:var(--ink-500);font-size:12px;">${esc(originGuess(e.name))}</span>`;
-      return `<tr><td class="l">${tag}</td><td class="l">${esc(e.name||('user '+e.id))}${uname}</td><td class="l">${origin}</td><td>${kstShort(e.date)}</td></tr>`;
+      return `<tr><td class="l">${tag}</td><td class="l">${esc(e.name||('user '+e.id))}${uname}</td><td>${kstShort(e.date)}</td></tr>`;
     };
     function apply(f){ paginate(body, pager, f==='all'?jl:jl.filter(e=>e.kind===f), 10, rowFn); }
     tabs.addEventListener('click', ev=>{
