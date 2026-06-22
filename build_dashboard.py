@@ -18,6 +18,7 @@ OkardCare Design System v1.0 (Forest/Signal 팔레트, Pretendard + Geist Mono, 
 
 결과: data/dashboard.html
 """
+import base64
 import csv
 import glob
 import json
@@ -94,7 +95,9 @@ TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>캉 티룸 · 텔레그램 통계</title>
+<title>Kangtearoom Data Analysis</title>
+<link rel="icon" type="image/png" href="__FAVICON__">
+<link rel="apple-touch-icon" href="__FAVICON__">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -854,7 +857,11 @@ def main():
 
 
 
+    logo = ROOT / "assets" / "kang_logo.png"
+    favicon = ("data:image/png;base64," + base64.b64encode(logo.read_bytes()).decode()) if logo.exists() else ""
+
     html = (TEMPLATE
+            .replace("__FAVICON__", favicon)
             .replace("__END__", rows[-1]["date"])
             .replace("__CHUSER__", CH_USER)
             .replace("__GRUSER__", GR_USER)
