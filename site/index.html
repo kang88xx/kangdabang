@@ -146,6 +146,8 @@
   tbody td a.post { color:var(--ink-900); text-decoration:none; font-weight:500;
     border-bottom:1px solid var(--forest-300); padding-bottom:1px; }
   tbody td a.post:hover { color:var(--forest-500); border-color:var(--signal); }
+  tbody td a.ulink { color:inherit; text-decoration:none; border-bottom:1px solid var(--line); padding-bottom:1px; }
+  tbody td a.ulink:hover { color:var(--forest-500); border-color:var(--forest-300); }
   .rank { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px;
     background:var(--forest-900); color:#fff; font-family:'Geist Mono',monospace; font-size:11px;
     font-weight:600; margin-right:10px; }
@@ -663,7 +665,9 @@ function renderJoinLeave(box, src){
     const rowFn = e => {
       const tag = e.kind==='join' ? `<span class="jl-tag join">유입</span>` : `<span class="jl-tag left">이탈</span>`;
       const uname = e.username ? ` <span style="color:var(--ink-300);">@${esc(e.username)}</span>` : '';
-      return `<tr><td class="l">${tag}</td><td class="l">${esc(e.name||('user '+e.id))}${uname}</td><td>${kstShort(e.date)}</td></tr>`;
+      const label = `${esc(e.name||('user '+e.id))}${uname}`;
+      const cell = e.username ? `<a class="ulink" href="https://t.me/${encodeURIComponent(e.username)}" target="_blank" rel="noopener">${label}</a>` : label;
+      return `<tr><td class="l">${tag}</td><td class="l">${cell}</td><td>${kstShort(e.date)}</td></tr>`;
     };
     function apply(f){ paginate(body, pager, f==='all'?jl:jl.filter(e=>e.kind===f), 10, rowFn); }
     tabs.addEventListener('click', ev=>{
@@ -692,7 +696,10 @@ renderJoinLeave(document.getElementById('joinLeaveGroup'), JOINLEAVE_GR);
     paginate(document.getElementById('tmBody'), document.getElementById('tmPager'), MEMBERS, 10,
       (m,i)=>{
         const uname = m.username ? ` <span style="color:var(--ink-300);">@${esc(m.username)}</span>` : '';
-        return `<tr><td class="l"><span class="rank ${i===0?'t1':i===1?'t2':''}">${i+1}</span>${esc(m.name||('user '+m.id))}${uname}</td><td>${fmt(m.count)}</td></tr>`;
+        const rank = `<span class="rank ${i===0?'t1':i===1?'t2':''}">${i+1}</span>`;
+        const label = `${esc(m.name||('user '+m.id))}${uname}`;
+        const who = m.username ? `<a class="ulink" href="https://t.me/${encodeURIComponent(m.username)}" target="_blank" rel="noopener">${label}</a>` : label;
+        return `<tr><td class="l">${rank}${who}</td><td>${fmt(m.count)}</td></tr>`;
       });
   } else {
     box.innerHTML = `<div class="empty"><div class="tag">No member data</div>
