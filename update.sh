@@ -1,6 +1,6 @@
 #!/bin/zsh
-# 캉티룸 통계 자동 업데이트 — collect.py(수집) → build_dashboard.py(생성) → site 복사 → Vercel 배포
-# launchd(com.kangtearoom.update)가 6시간마다(KST 09·15·21·03시) 실행한다.
+# 캉티룸 통계 자동 업데이트 — git pull(코드 동기화) → collect.py(수집) → build_dashboard.py → site 복사 → Vercel 배포
+# launchd(com.kangtearoom.update)가 매시 정각(하루 24회) + KST 08:55(전날 24시간 마감) 실행한다.
 # 로그: data/update.log
 #
 # 실패 게이트: 수집/빌드가 실패하거나 오늘 데이터가 비면 배포를 건너뛰고 맥 알림을 띄운다.
@@ -9,6 +9,15 @@
 # PATH: launchd 최소 PATH 대응으로 homebrew bin(node·vercel) 선반영.
 export PATH="/opt/homebrew/bin:$PATH"
 cd "$(dirname "$0")" || exit 1
+
+# 코드 자동 동기화 — 여기서 고쳐 GitHub에 push하면 다음 실행 때 맥미니가 자동으로 최신 코드를 받는다.
+# git reset --hard로 원격(main)에 강제 일치(추적 파일만; data/·config.py·세션은 .gitignore라 안전).
+# pull이 update.sh 자신을 바꿀 수 있어, 받은 뒤 '갱신된 스크립트'로 1회 재실행(실행 중 파일 변형 footgun 방지).
+if [ -z "$_OMC_PULLED" ]; then
+  git fetch --quiet origin main 2>/dev/null && git reset --hard --quiet origin/main 2>/dev/null
+  export _OMC_PULLED=1
+  exec /bin/zsh "$0" "$@"
+fi
 PY="./venv/bin/python"
 LOG="data/update.log"
 LAUNCHD_LOG="data/launchd.log"

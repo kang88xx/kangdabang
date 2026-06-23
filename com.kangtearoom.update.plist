@@ -11,12 +11,10 @@
     <string>/Users/henry/telegram-stats/update.sh</string>
   </array>
 
-  <!-- KST 09 · 15 · 21 · 08:55시. 09시=새 날 시작, 08:55=직전 날 24시간 마감 수집(그룹 활동 완전 집계) -->
+  <!-- 매시 정각(하루 24회) + KST 08:55(직전 날 24시간 마감 수집). Minute만 주면 매시간 실행됨 -->
   <key>StartCalendarInterval</key>
   <array>
-    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Hour</key><integer>15</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Minute</key><integer>0</integer></dict>
     <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>55</integer></dict>
   </array>
 
