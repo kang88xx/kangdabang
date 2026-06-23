@@ -64,8 +64,11 @@ def load_latest_posts():
             if views <= 0:                       # 광고/서비스 메시지 제외
                 continue
             try:
-                _dt = datetime.fromisoformat(r["date"]).astimezone(KST)
-                _d, _t = _dt.strftime("%Y-%m-%d"), _dt.strftime("%H:%M")
+                _dt = datetime.fromisoformat(r["date"])
+                # 그룹핑 날짜(_d)는 daily_summary와 동일하게 UTC 일 버킷,
+                # 표시 시각(_t)은 한국시간(KST)으로.
+                _d = _dt.astimezone(timezone.utc).strftime("%Y-%m-%d")
+                _t = _dt.astimezone(KST).strftime("%H:%M")
             except Exception:
                 _d, _t = r["date"][:10], r["date"][11:16]
             posts.append({
@@ -108,8 +111,8 @@ TEMPLATE = r"""<!DOCTYPE html>
     --forest-950:#061B14; --forest-900:#0B3A2C; --forest-700:#134C39;
     --forest-500:#25876A; --forest-300:#8FBFAD; --forest-100:#DCEAE2;
     --signal:#14B87D; --positive:#1F8A5B; --negative:#C8404E;
-    --info:#2E84AE; --chart-alt:#6E63D6;
-    --ink-900:#14201B; --ink-700:#34433D; --ink-500:#5F6C65; --ink-300:#9BA7A0;
+    --info:#2E84AE; --chart-alt:#2E84AE;
+    --ink-900:#14201B; --ink-700:#34433D; --ink-500:#5F6C65; --ink-300:#7E8C84;
     --paper:#F4F6F2; --white:#FFFFFF; --line:#E3E7DF; --line-soft:#EEF1EC;
   }
   * { box-sizing:border-box; }
@@ -154,6 +157,11 @@ TEMPLATE = r"""<!DOCTYPE html>
     color:var(--ink-500); background:var(--white); border:1px solid var(--line); border-left:3px solid var(--signal);
     padding:11px 16px; margin-bottom:40px; }
   .basis-note b { color:var(--forest-700); font-weight:600; }
+  .week-summary { font-size:14px; line-height:1.5; color:var(--ink-700);
+    background:var(--white); border:1px solid var(--line); border-left:3px solid var(--forest-500);
+    padding:13px 18px; margin-bottom:20px; }
+  .week-summary:empty { display:none; }
+  .week-summary b { font-family:'Geist Mono',monospace; color:var(--forest-700); font-weight:600; }
   .sec-head { display:flex; align-items:baseline; gap:18px;
     border-top:1.5px solid var(--ink-900); padding-top:16px; margin-bottom:28px; }
   .sec-head .num { font-family:'Geist Mono',monospace; font-size:14px; font-weight:500; color:var(--signal); }
@@ -182,8 +190,6 @@ TEMPLATE = r"""<!DOCTYPE html>
   .datesel { font-family:'Geist Mono',monospace; font-size:12px; text-transform:none; letter-spacing:0;
     color:var(--ink-900); background:var(--white); border:1px solid var(--line); padding:5px 10px; cursor:pointer; }
   .datesel:hover { border-color:var(--forest-300); }
-  .scroll-link { cursor:pointer; border-bottom:1px dotted var(--ink-300); padding-bottom:1px; transition:color .15s,border-color .15s; }
-  .scroll-link:hover { color:var(--forest-500); border-color:var(--forest-500); }
 
   /* DETAIL BUTTON + MODAL */
   .card .detail-btn { margin-top:12px; font-family:'Geist Mono',monospace; font-size:10.5px;
@@ -202,7 +208,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   .modal-close { background:none; border:none; font-size:24px; line-height:1; cursor:pointer;
     color:var(--ink-500); padding:0 2px; }
   .modal-close:hover { color:var(--ink-900); }
-  .modal-body { overflow-y:auto; }
+  .modal-body { overflow-y:auto; overflow-x:auto; }
   .modal-body thead th { position:sticky; top:0; background:var(--white); z-index:1; }
 
   /* CHARTS */
@@ -223,6 +229,14 @@ TEMPLATE = r"""<!DOCTYPE html>
   .note-box dd { margin:0; font-size:13.5px; line-height:1.55; color:var(--ink-700); }
   .note-box dd code { font-family:'Geist Mono',monospace; font-size:12px; background:var(--forest-100);
     padding:1px 5px; color:var(--forest-700); }
+  /* 채움형(reverse) — 녹색 배경 + 배경(연한)색 텍스트 */
+  .note-box.filled { background:var(--forest-700); border-color:var(--forest-700); border-left-color:var(--signal); color:var(--paper); }
+  .note-box.filled h4 { color:var(--paper); }
+  .note-box.filled h4 code { background:rgba(255,255,255,.14); color:var(--signal); }
+  .note-box.filled dt { color:var(--forest-300); }
+  .note-box.filled dd { color:rgba(244,246,242,.92); }
+  .note-box.filled dd b { color:#fff; }
+  .note-box.filled dd code { background:rgba(255,255,255,.14); color:var(--forest-100); }
 
   /* TABLE */
   .table-wrap { background:var(--white); border:1px solid var(--line); overflow-x:auto; }
@@ -244,8 +258,6 @@ TEMPLATE = r"""<!DOCTYPE html>
     background:var(--forest-900); color:#fff; font-family:'Geist Mono',monospace; font-size:11px;
     font-weight:600; margin-right:10px; }
   .rank.t1 { background:var(--signal); } .rank.t2 { background:var(--forest-500); }
-  .badge { font-family:'Geist Mono',monospace; font-size:11px; padding:2px 7px;
-    border:1px solid var(--line); color:var(--ink-500); }
 
   /* PAGINATION */
   .pager { display:flex; flex-wrap:wrap; gap:6px; margin-top:16px; justify-content:center; }
@@ -265,22 +277,6 @@ TEMPLATE = r"""<!DOCTYPE html>
   .jl-tag.join { color:var(--positive); border:1px solid #BFE0CF; }
   .jl-tag.left { color:var(--negative); border:1px solid #F0C9CD; }
 
-  /* 공유처 (public forwards) — 표 안 펼침 */
-  details.fwd { font-family:'Geist Mono',monospace; }
-  details.fwd > summary { cursor:pointer; list-style:none; color:var(--chart-alt);
-    font-size:12px; font-weight:500; white-space:nowrap; }
-  details.fwd > summary::-webkit-details-marker { display:none; }
-  details.fwd > summary::after { content:' ▾'; color:var(--ink-300); }
-  details.fwd[open] > summary::after { content:' ▴'; }
-  .fwdlist { margin-top:8px; display:flex; flex-direction:column; gap:4px;
-    text-align:left; max-width:280px; margin-left:auto; }
-  .fwdlist .row { display:flex; justify-content:space-between; gap:12px; font-size:11.5px;
-    padding:3px 8px; background:var(--paper); border:1px solid var(--line-soft); }
-  .fwdlist .row span:first-child { color:var(--ink-700); overflow:hidden;
-    text-overflow:ellipsis; white-space:nowrap; }
-  .fwdlist .row span:last-child { color:var(--chart-alt); font-variant-numeric:tabular-nums; }
-  .fwd-none { color:var(--ink-300); }
-
   /* placeholder / empty state */
   .empty { background:var(--white); border:1px dashed var(--line); padding:28px 24px;
     text-align:center; color:var(--ink-500); font-size:14px; line-height:1.6; }
@@ -297,13 +293,28 @@ TEMPLATE = r"""<!DOCTYPE html>
     .note-box dl { grid-template-columns:1fr; gap:2px 0; }
     .note-box dt { margin-top:8px; }
     .rail-in, main, footer { padding-left:24px; padding-right:24px; }
-    /* 상단바: 모바일에서 세로 스택 → 오버플로 방지 */
-    .rail-in { grid-template-columns:1fr; justify-items:center; gap:3px; padding-top:7px; padding-bottom:7px; }
-    .rail .mid { white-space:normal; text-align:center; letter-spacing:.02em; }
-    .rail .end { justify-content:center; }
+    /* D2: 상단바 1행화 — "KANGTEAROOM DATA" 숨기고 2열 정리, 높이 축소 */
+    .rail-in > span:first-child { display:none; }
+    .rail-in { grid-template-columns:1fr auto; align-items:center; gap:8px;
+      padding-top:6px; padding-bottom:6px; }
+    .rail .mid { white-space:normal; letter-spacing:.02em; text-align:left; }
+    .rail .end { justify-content:flex-end; }
+    /* 1행 rail에 맞춰 섹션 앵커 보정 */
+    section, #topMembers { scroll-margin-top:54px; }
     .cards-tight { grid-template-columns:repeat(2,minmax(0,1fr)); }
     .basis-note { line-height:1.6; }
-    .eyebrow, .rail, .dtag, .badge { letter-spacing:.06em; } }
+    .eyebrow, .rail, .dtag { letter-spacing:.06em; }
+    /* D1: 터치 타깃 ≥44px */
+    .tab { padding:11px 16px; }
+    .pager button { min-width:44px; padding:11px 12px; }
+    .detail-btn { width:100%; padding:12px 10px; text-align:center; }
+    .modal-close { width:44px; height:44px; display:flex; align-items:center;
+      justify-content:center; padding:0; }
+    /* D3: 모달 하단시트화 + 표 축소 */
+    .modal-back { align-items:flex-end; padding:12px; }
+    .modal { max-height:88vh; }
+    .modal-body table { font-size:12px; }
+    .modal-body th, .modal-body td { padding:9px 10px; } }
 </style>
 </head>
 <body>
@@ -312,20 +323,21 @@ TEMPLATE = r"""<!DOCTYPE html>
     <div class="rail-in">
       <span>KANGTEAROOM DATA</span>
       <span class="mid"><a class="chlink" href="https://t.me/__CHUSER__" target="_blank" rel="noopener">@__CHUSER__</a> · <a class="chlink" href="https://t.me/__GRUSER__" target="_blank" rel="noopener">@__GRUSER__</a></span>
-      <span class="end"><span id="lastUpdated">최종 업데이트 __GENERATED__ KST</span><button id="refreshBtn" class="refresh-btn" hidden>🔄 지금 갱신</button></span>
+      <span class="end"><span id="lastUpdated">최종 업데이트 __GENERATED__ KST</span><button id="refreshBtn" class="refresh-btn" hidden>지금 갱신</button></span>
     </div>
   </div>
   <div id="refreshToast" class="refresh-toast" role="status" aria-live="polite" hidden></div>
 
   <main>
 
-    <div class="basis-note">데이터 기준 · <b>한국시간(KST) 오전 9시 ~ 다음날 오전 9시 = 1일(24시간)</b> · 매일 09:00에 새 날 집계 시작(텔레그램 공식 통계 UTC 일 버킷 기준) · 6시간마다 자동 갱신(09·15·21·03시) · 오늘 값은 9시부터 현재까지 누적(진행 중)</div>
+    <div class="basis-note">데이터 기준 · <b>한국시간(KST) 오전 9시 ~ 다음날 09시 = 1일(24시간)</b> · 하루 4회 자동 갱신</div>
 
     <!-- 01 OVERVIEW -->
     <section>
       <div class="sec-head">
         <div><div class="eyebrow">Overview</div><h2>오늘의 핵심 지표</h2></div>
       </div>
+      <div class="week-summary" id="weekSummary"></div>
       <div class="cards" id="cards"></div>
     </section>
 
@@ -340,14 +352,7 @@ TEMPLATE = r"""<!DOCTYPE html>
         <div class="chart-box"><div class="eyebrow">구독자 추이</div><canvas id="subs"></canvas></div>
         <div class="chart-box"><div class="eyebrow">들어옴 · 나감 (일별)</div><canvas id="subsNet"></canvas></div>
       </div>
-    </section>
-
-    <!-- 02b 유입 · 이탈 인원 -->
-    <section>
-      <div class="sec-head">
-        <div><div class="eyebrow">Channel · Members</div><h2>채널 — 유입 · 이탈 인원</h2></div>
-        <span class="dtag ch">@__CHUSER__</span>
-      </div>
+      <div class="eyebrow" style="margin:28px 0 12px;">유입 · 이탈 인원 (누가)</div>
       <div id="joinLeave"></div>
     </section>
 
@@ -371,10 +376,10 @@ TEMPLATE = r"""<!DOCTYPE html>
         <div><div class="eyebrow">Channel · Posts</div><h2>채널 — 포스트별 성과</h2></div>
         <span class="dtag ch">@__CHUSER__</span>
       </div>
-      <div class="eyebrow" style="margin-bottom:12px;">TOP 게시물 — 조회수 순 (제목 클릭 시 텔레그램에서 열림 · 공유처 펼치면 재공유 채널·외부 조회수)</div>
+      <div class="eyebrow" style="margin-bottom:12px;">TOP 게시물 — 조회수 순 (제목 클릭 시 텔레그램에서 열림)</div>
       <div class="table-wrap" style="margin-bottom:28px;">
         <table><thead><tr>
-          <th class="l">#  게시물</th><th>날짜</th><th>조회수</th><th>도달률</th><th>공유</th><th>공유처 · 외부조회</th><th>댓글</th><th>ER</th>
+          <th class="l">#  게시물</th><th>날짜</th><th>조회수</th><th>공유</th><th>댓글</th>
         </tr></thead><tbody id="topPosts"></tbody></table>
       </div>
       <div class="eyebrow" style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -383,7 +388,7 @@ TEMPLATE = r"""<!DOCTYPE html>
       </div>
       <div class="table-wrap">
         <table><thead><tr>
-          <th class="l">게시물</th><th>시각</th><th>조회수</th><th>도달률</th><th>공유</th><th>공유처 · 외부조회</th><th>댓글</th><th>ER</th>
+          <th class="l">게시물</th><th>시각</th><th>조회수</th><th>공유</th><th>댓글</th>
         </tr></thead><tbody id="allPosts"></tbody></table>
       </div>
       <div class="pager" id="allPostsPager"></div>
@@ -395,8 +400,8 @@ TEMPLATE = r"""<!DOCTYPE html>
         <div><div class="eyebrow">Channel · Official</div><h2>채널 — 공식 통계</h2></div>
         <span class="dtag ch">@__CHUSER__</span>
       </div>
-      <div class="note-box">
-        <h4><span class="ico">◆</span> 텔레그램 공식 통계 — <code>stats.GetBroadcastStats</code></h4>
+      <div class="note-box filled">
+        <h4>텔레그램 공식 통계 — <code>stats.GetBroadcastStats</code></h4>
         <dl>
           <dt>제공 데이터</dt>
           <dd>구독자 성장 그래프, <b>조회 출처</b>(채널/검색/공유/링크), 알림 끈 비율(mute), 시간대별 조회, 게시물별 노출 등 — 텔레그램이 직접 집계한 값입니다.</dd>
@@ -423,15 +428,10 @@ TEMPLATE = r"""<!DOCTYPE html>
         <div class="chart-box"><div class="eyebrow">메시지 · 활성 유저</div><canvas id="grActivity"></canvas></div>
       </div>
       <div id="topMembers"></div>
-    </section>
-
-    <!-- 07 GROUP 유입·이탈 인원 -->
-    <section id="sec-group-jl">
-      <div class="sec-head group-head">
-        <div><div class="eyebrow">Group · Members</div><h2>그룹 — 유입 · 이탈 인원</h2></div>
-        <span class="dtag gr">@__GRUSER__</span>
+      <div id="grJoinLeaveWrap" hidden>
+        <div class="eyebrow" style="margin:28px 0 12px;">유입 · 이탈 인원 (누가)</div>
+        <div id="joinLeaveGroup"></div>
       </div>
-      <div id="joinLeaveGroup"></div>
     </section>
 
 
@@ -461,7 +461,6 @@ const POSTS    = __POSTS__;
 const OFFICIAL = __OFFICIAL__;
 const MEMBERS  = __MEMBERS__;
 
-const FWDS     = __FWDS__;     // { msg_id: {count, ext_views, channels:[{title,views}]} }
 const JOINLEAVE= __JOINLEAVE__;  // { available, events:[{date,kind,name,username,id}] }
 const JOINLEAVE_GR = __JOINLEAVE_GR__;  // 그룹 유입·이탈
 const CH_USER  = "__CHUSER__";
@@ -473,32 +472,74 @@ const dates = DATA.map(r => r.date.slice(5));        // MM-DD
 const last  = DATA[DATA.length-1], prev = DATA[DATA.length-2] || last;
 const subsNow = last.ch_subscribers;
 
+// ---------- 완료일(진행중 오늘 제외) 기준 최근 7일 헬퍼 ----------
+// DATA의 마지막 행은 진행 중인 '오늘'이라 평균·요약에서 제외한다.
+const DONE = DATA.length > 1 ? DATA.slice(0, -1) : DATA.slice();
+const recent7 = DONE.slice(-7);
+const avgOf = (rows, key) => {
+  const xs = rows.map(r => r[key]).filter(v => v != null);
+  return xs.length ? xs.reduce((a,b)=>a+b,0) / xs.length : null;
+};
+
+// E2: 스냅샷 지표(구독자·멤버) — 현재값 vs 최근7일평균 화살표 한 줄
+function avg7(key, v){
+  if (v == null) return '';
+  const a = avgOf(recent7, key);
+  if (a == null) return '';
+  const d = v - a;
+  const cls = d>0?'up':d<0?'down':'flat';
+  const arrow = d>0?'▲':d<0?'▼':'—';
+  return `<div class="delta ${cls}" style="font-size:11px;margin-top:3px;">`
+    + `${arrow} ${fmt(Math.abs(Math.round(d)))} <span style="color:var(--ink-300);font-weight:400;">7일 평균 대비</span></div>`;
+}
+
+// ---------- E1: 주간 한 줄 요약 (Overview 최상단) ----------
+(function(){
+  const n = recent7.length;
+  const el = document.getElementById('weekSummary');
+  if (!el || !n){ if(el) el.remove(); return; }
+  // 구독자 증감: 7일 구간 첫·끝 완료일 스냅샷 차이
+  const subsVals = recent7.map(r=>r.ch_subscribers).filter(v=>v!=null);
+  const subsDelta = subsVals.length>=2 ? subsVals[subsVals.length-1]-subsVals[0] : null;
+  const viewsAvg = avgOf(recent7, 'ch_views');
+  const msgAvg   = avgOf(recent7, 'gr_messages');
+  const head = n>=7 ? '최근 7일' : `집계 ${n}일`;
+  const parts = [];
+  if (subsDelta != null){
+    const s = subsDelta>0?`+${fmt(subsDelta)}`:subsDelta<0?`-${fmt(Math.abs(subsDelta))}`:'±0';
+    parts.push(`구독자 <b>${s}</b>`);
+  }
+  if (viewsAvg != null) parts.push(`조회수 일평균 <b>${fmt(Math.round(viewsAvg))}</b>`);
+  if (msgAvg   != null) parts.push(`그룹 메시지 일평균 <b>${fmt(Math.round(msgAvg))}</b>`);
+  if (!parts.length){ el.remove(); return; }
+  el.innerHTML = `${head}(완료일 기준) · ` + parts.join(' · ');
+})();
+
 // ---------- 01 KPI 카드 ----------
 const cards = [
-  {label:'구독자', key:'ch_subscribers', dom:'채널', scroll:'sec-subs'},
-  {label:'채널 조회수 (일)', key:'ch_views', dom:'채널', scroll:'sec-reach'},
-  {label:'그룹 멤버', key:'gr_members', dom:'그룹', scroll:'sec-group'},
-  {label:'그룹 메시지 (일)', key:'gr_messages', dom:'그룹', scroll:'sec-group'},
-  {label:'그룹 활성 유저', key:'gr_active_users', dom:'그룹', scroll:'topMembers'},
+  {label:'구독자', key:'ch_subscribers', flow:false, snap:true},
+  {label:'채널 조회수 (일)', key:'ch_views', flow:true},
+  {label:'그룹 멤버', key:'gr_members', flow:false, snap:true},
+  {label:'그룹 메시지 (일)', key:'gr_messages', flow:true},
+  {label:'그룹 활성 유저 (일)', key:'gr_active_users', flow:true},
 ];
 document.getElementById('cards').innerHTML = cards.map(c => {
   const v = last[c.key], pv = prev[c.key];
   const d = (v==null||pv==null) ? null : v - pv;
-  const cls = d==null?'flat':d>0?'up':d<0?'down':'flat', arrow = d==null?'—':d>0?'▲':d<0?'▼':'—';
-  const deltaTxt = d==null ? '—' : `${arrow} ${fmt(Math.abs(d))} <span style="color:var(--ink-300);font-weight:400;">전일대비</span>`;
+  // 유량형 지표(조회수·메시지·활성)는 오늘이 진행 중이라 전일대비가 가짜 급감으로 보임 → '집계중' 표기
+  const cls = c.flow ? 'flat' : (d==null?'flat':d>0?'up':d<0?'down':'flat');
+  const arrow = d==null?'—':d>0?'▲':d<0?'▼':'—';
+  const deltaTxt = c.flow
+    ? `<span style="color:var(--ink-300);font-weight:400;">오늘 집계중 (진행)</span>`
+    : (d==null ? '—' : `${arrow} ${fmt(Math.abs(d))} <span style="color:var(--ink-300);font-weight:400;">전일대비</span>`);
   return `<div class="card">
-    <div class="label">${c.scroll ? `<a class="scroll-link" data-scroll="${c.scroll}" title="해당 섹션으로 이동">${c.label}</a>` : c.label} <span class="badge">${c.dom}</span></div>
+    <div class="label">${c.label}</div>
     <div class="value">${v==null?'—':fmt(v)}</div>
     <div class="delta ${cls}">${deltaTxt}</div>
-    <button class="detail-btn" data-key="${c.key}" data-label="${c.label}">📊 일자별 기록</button>
+    ${c.snap ? avg7(c.key, v) : ''}
+    <button class="detail-btn" data-key="${c.key}" data-label="${c.label}">일자별 기록</button>
   </div>`;
 }).join('');
-
-// '그룹 활성 유저' 카드 라벨 클릭 → 활발한 멤버 표로 스크롤
-document.addEventListener('click', e => {
-  const s = e.target.closest('.scroll-link');
-  if (s){ const t = document.getElementById(s.dataset.scroll); if (t) t.scrollIntoView({behavior:'smooth', block:'start'}); }
-});
 
 // ---------- 지표 상세 레이어 팝업 (일자별 기록) ----------
 (function(){
@@ -550,23 +591,25 @@ document.addEventListener('click', e => {
 const dViews = last.ch_views, dFwd = last.ch_forwards, dRep = last.ch_replies;
 const reach = subsNow ? dViews/subsNow : 0;
 const er    = dViews ? (dFwd+dRep)/dViews : 0;
+// A5: 도달률·ER은 진행 중인 '오늘' 값으로 계산되므로 완성치 오해 방지용 '(진행중)' 표식.
+const wip = `<span style="color:var(--ink-300);font-weight:400;font-size:11px;"> (진행중)</span>`;
 document.getElementById('reachCards').innerHTML = [
-  {label:'도달률 (조회수÷구독자)', val:pct(reach)},
-  {label:'참여율 ER ((공유+댓글)÷조회수)', val:pct(er)},
+  {label:'도달률 (조회수÷구독자)', val:pct(reach), wip:true},
+  {label:'참여율 ER ((공유+댓글)÷조회수)', val:pct(er), wip:true},
   {label:'오늘 공유', val:fmt(dFwd)},
   {label:'오늘 댓글', val:fmt(dRep)},
-].map(c=>`<div class="card"><div class="label">${c.label}</div><div class="value">${c.val}</div></div>`).join('');
+].map(c=>`<div class="card"><div class="label">${c.label}${c.wip?wip:''}</div><div class="value">${c.val}</div></div>`).join('');
 
 // ---------- 차트 공통 ----------
-Chart.defaults.color = '#9BA7A0';
+Chart.defaults.color = '#7E8C84';
 Chart.defaults.borderColor = '#EEF1EC';
 Chart.defaults.font.family = "'Geist Mono', monospace";
 Chart.defaults.font.size = 11;
 const baseOpts = {
   responsive:true, maintainAspectRatio:false,
   plugins:{legend:{labels:{boxWidth:10,boxHeight:10,font:{size:11},color:'#5F6C65'}}},
-  scales:{ y:{grid:{color:'#EEF1EC'},ticks:{color:'#9BA7A0'},border:{color:'#E3E7DF'}},
-           x:{grid:{display:false},ticks:{color:'#9BA7A0'},border:{color:'#E3E7DF'}} }
+  scales:{ y:{grid:{color:'#EEF1EC'},ticks:{color:'#7E8C84'},border:{color:'#E3E7DF'}},
+           x:{grid:{display:false},ticks:{color:'#7E8C84'},border:{color:'#E3E7DF'}} }
 };
 const clone = o => JSON.parse(JSON.stringify(o));
 // 차트마다 옵션을 복제해 공유 충돌 방지. 막대는 offset:true 로 양 끝 막대 잘림 방지.
@@ -599,24 +642,27 @@ if (hasFlow) {
 
 // 03 조회/인게이지먼트
 bar('views', [{label:'조회수',data:DATA.map(r=>r.ch_views),backgroundColor:'#25876A',borderRadius:0}]);
-line('engage',[L('공유','ch_forwards','#6E63D6'),L('댓글','ch_replies','#1F8A5B')]);
+line('engage',[L('공유','ch_forwards','#2E84AE'),L('댓글','ch_replies','#1F8A5B')]);
 
 // 06 그룹 — KPI 카드(전일대비) + 추이 + 순증·순감
 const grCards = [
   {label:'그룹 멤버', key:'gr_members'},
-  {label:'메시지 (일)', key:'gr_messages'},
-  {label:'활성 유저 (일)', key:'gr_active_users'},
+  {label:'메시지 (일)', key:'gr_messages', flow:true},
+  {label:'활성 유저 (일)', key:'gr_active_users', flow:true},
 ];
 document.getElementById('grCards').innerHTML = grCards.map(c => {
   const v = last[c.key], pv = prev[c.key];
   const d = (v==null||pv==null) ? null : v - pv;
-  const cls = d==null?'flat':d>0?'up':d<0?'down':'flat', arrow = d==null?'—':d>0?'▲':d<0?'▼':'—';
-  const deltaTxt = d==null ? '—' : `${arrow} ${fmt(Math.abs(d))} <span style="color:var(--ink-300);font-weight:400;">전일대비</span>`;
+  const cls = c.flow ? 'flat' : (d==null?'flat':d>0?'up':d<0?'down':'flat');
+  const arrow = d==null?'—':d>0?'▲':d<0?'▼':'—';
+  const deltaTxt = c.flow
+    ? `<span style="color:var(--ink-300);font-weight:400;">오늘 집계중 (진행)</span>`
+    : (d==null ? '—' : `${arrow} ${fmt(Math.abs(d))} <span style="color:var(--ink-300);font-weight:400;">전일대비</span>`);
   return `<div class="card">
     <div class="label">${c.label}</div>
     <div class="value">${v==null?'—':fmt(v)}</div>
     <div class="delta ${cls}">${deltaTxt}</div>
-    <button class="detail-btn" data-key="${c.key}" data-label="${c.label}">📊 일자별 기록</button>
+    <button class="detail-btn" data-key="${c.key}" data-label="${c.label}">일자별 기록</button>
   </div>`;
 }).join('');
 
@@ -630,19 +676,6 @@ line('grActivity',[L('메시지','gr_messages','#2E84AE'),L('활성 유저','gr_
 
 // ---------- 04 포스트 표 (하이퍼링크) ----------
 const link = id => `https://t.me/${CH_USER}/${id}`;
-const erOf = p => p.views ? ((p.forwards+p.replies)/p.views) : 0;
-const reachOf = p => subsNow ? p.views/subsNow : 0;
-
-// 공유처 셀: 공개 재공유 채널 + 그 채널에서의 조회수 (없으면 '—')
-const fwdCell = p => {
-  const f = FWDS[String(p.id)];
-  if (!f || !f.channels || !f.channels.length)
-    return `<td><span class="fwd-none">—</span></td>`;
-  const rows = f.channels.map(c =>
-    `<div class="row"><span>${esc(c.title)}</span><span>${fmt(c.views)}</span></div>`).join('');
-  return `<td><details class="fwd"><summary>${f.count}곳 · ${fmt(f.ext_views)}</summary>
-    <div class="fwdlist">${rows}</div></details></td>`;
-};
 
 if (POSTS.length) {
   // TOP 게시물 — 조회수 순 (게시 날짜 포함)
@@ -652,8 +685,8 @@ if (POSTS.length) {
       <td class="l"><span class="rank ${i===0?'t1':i===1?'t2':''}">${i+1}</span>
         <a class="post" href="${link(p.id)}" target="_blank" rel="noopener">${esc(p.text)}</a></td>
       <td>${p.date.slice(5)}</td>
-      <td>${fmt(p.views)}</td><td>${pct(reachOf(p))}</td>
-      <td>${fmt(p.forwards)}</td>${fwdCell(p)}<td>${fmt(p.replies)}</td><td>${pct(erOf(p))}</td>
+      <td>${fmt(p.views)}</td>
+      <td>${fmt(p.forwards)}</td><td>${fmt(p.replies)}</td>
     </tr>`).join('');
 
   // 일별 게시물 — 날짜 선택 → 해당일 게시물만 (시간 역순)
@@ -661,8 +694,8 @@ if (POSTS.length) {
     <tr>
       <td class="l"><a class="post" href="${link(p.id)}" target="_blank" rel="noopener">${esc(p.text)}</a></td>
       <td>${p.time}</td>
-      <td>${fmt(p.views)}</td><td>${pct(reachOf(p))}</td>
-      <td>${fmt(p.forwards)}</td>${fwdCell(p)}<td>${fmt(p.replies)}</td><td>${pct(erOf(p))}</td>
+      <td>${fmt(p.views)}</td>
+      <td>${fmt(p.forwards)}</td><td>${fmt(p.replies)}</td>
     </tr>`;
   const allBody = document.getElementById('allPosts');
   const pager   = document.getElementById('allPostsPager');
@@ -678,7 +711,7 @@ if (POSTS.length) {
   sel.addEventListener('change', ()=> show(sel.value));
   show(days[0]);
 } else {
-  const empty = `<tr><td class="l" colspan="8" style="text-align:center;color:var(--ink-300);padding:24px;">포스트 데이터 없음 — collect.py 실행 후 표시됩니다.</td></tr>`;
+  const empty = `<tr><td class="l" colspan="5" style="text-align:center;color:var(--ink-300);padding:24px;">포스트 데이터 없음 — collect.py 실행 후 표시됩니다.</td></tr>`;
   document.getElementById('topPosts').innerHTML = empty;
   document.getElementById('allPosts').innerHTML = empty;
 }
@@ -688,7 +721,9 @@ if (POSTS.length) {
   const box = document.getElementById('officialStats');
   if (OFFICIAL && OFFICIAL.available) {
     const m = OFFICIAL.metrics || {};
-    const entries = Object.entries(m);
+    // E5: 값이 0(숫자) 또는 빈 문자열인 지표는 카드에서 숨김. "%" 등 문자열 값은 유지.
+    const entries = Object.entries(m).filter(([,v]) =>
+      !(v === 0 || v === null || v === '' || (typeof v === 'string' && v.trim() === '')));
     if (!entries.length) {
       box.innerHTML = `<div class="empty"><div class="tag">No official stats</div><b>공식 통계 지표 없음</b></div>`;
     } else {
@@ -776,7 +811,15 @@ function renderJoinLeave(box, src){
   }
 }
 renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
-renderJoinLeave(document.getElementById('joinLeaveGroup'), JOINLEAVE_GR);
+// E7: 그룹 유입·이탈은 실제 이벤트가 있을 때만 노출 (admin log 구조상 거의 항상 빈값 → "고장" 인상 방지)
+(function(){
+  const wrap = document.getElementById('grJoinLeaveWrap');
+  const hasGr = JOINLEAVE_GR && JOINLEAVE_GR.available && Array.isArray(JOINLEAVE_GR.events) && JOINLEAVE_GR.events.length;
+  if (hasGr){
+    wrap.hidden = false;
+    renderJoinLeave(document.getElementById('joinLeaveGroup'), JOINLEAVE_GR);
+  }
+})();
 
 // ---------- 06 활발한 멤버 (10명씩 페이지네이션) ----------
 (function(){
@@ -852,14 +895,13 @@ renderJoinLeave(document.getElementById('joinLeaveGroup'), JOINLEAVE_GR);
 def main():
     rows = load_summary(SRC)
     if not rows:
-        print("데이터가 없습니다:", SRC)
-        return
+        print("데이터가 없습니다:", SRC, file=sys.stderr)
+        sys.exit(1)   # 빈 빌드 차단 — update.sh 게이트가 비정상 종료를 감지
 
     posts = load_latest_posts()
     official = load_json("broadcast_stats.json", {"available": False})
     members = load_json("group_top_members.json", [])
 
-    fwds = load_json("post_forwards.json", {})
     joinleave = load_json("join_leave.json", {"available": False})
     joinleave_gr = load_json("join_leave_group.json", {"available": False})
 
@@ -871,14 +913,12 @@ def main():
     html = (TEMPLATE
             .replace("__FAVICON__", favicon)
             .replace("__GENERATED__", datetime.now(KST).strftime("%Y-%m-%d %H:%M"))
-            .replace("__END__", rows[-1]["date"])
             .replace("__CHUSER__", CH_USER)
             .replace("__GRUSER__", GR_USER)
             .replace("__DATA__", json.dumps(rows, ensure_ascii=False))
             .replace("__POSTS__", json.dumps(posts, ensure_ascii=False))
             .replace("__OFFICIAL__", json.dumps(official, ensure_ascii=False))
             .replace("__MEMBERS__", json.dumps(members, ensure_ascii=False))
-            .replace("__FWDS__", json.dumps(fwds, ensure_ascii=False))
             .replace("__JOINLEAVE__", json.dumps(joinleave, ensure_ascii=False))
             .replace("__JOINLEAVE_GR__", json.dumps(joinleave_gr, ensure_ascii=False)))
 

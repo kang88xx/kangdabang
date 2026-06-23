@@ -7,7 +7,6 @@ from pathlib import Path
 
 from telethon import TelegramClient
 from telethon.tl.functions.channels import GetFullChannelRequest
-from telethon.tl.functions.messages import GetExportedChatInvitesRequest
 from telethon.tl.functions.stats import (
     GetBroadcastStatsRequest, GetMessagePublicForwardsRequest,
 )
@@ -54,11 +53,15 @@ async def collect_post_forwards(client, entity, posts, top_n=FWD_TOP_N):
     targets = sorted([p for p in posts if p["forwards"] > 0],
                      key=lambda p: -p["forwards"])[:top_n]
     out = {}
+    logged_fail = False
     for p in targets:
         try:
             pf = await client(GetMessagePublicForwardsRequest(
                 channel=entity, msg_id=p["id"], offset="", limit=30))
-        except Exception:
+        except Exception as e:
+            if not logged_fail:       # 첫 실패 1건만 로그(권한없음/데이터없음 구분 · 로그폭주 방지)
+                print(f"  post_forwards 실패: {type(e).__name__}: {e}")
+                logged_fail = True
             continue
         chats = {c.id: getattr(c, "title", "외부 채널") for c in getattr(pf, "chats", [])}
         channels = []
@@ -91,6 +94,8 @@ async def collect_group(client, username, since):
     async for msg in client.iter_messages(entity):
         if msg.date < since:
             break
+        if msg.action:                # 서비스 메시지(가입/핀/이름변경 등) 제외
+            continue
         msg_count += 1
         if msg.sender_id:
             speaker[msg.sender_id] += 1
@@ -189,24 +194,6 @@ async def collect_join_leave(client, entity, limit=500):
         return {"available": False, "reason": f"{type(ex).__name__}: {ex}"}
     return {"available": True, "events": events}
 
-async def collect_invite_sources(client, entity):
-    try:
-        me = await client.get_me()
-        res = await client(GetExportedChatInvitesRequest(
-            peer=entity, admin_id=me.id, limit=50))
-    except Exception:
-        return []
-    out = []
-    for inv in getattr(res, "invites", []):
-        out.append({
-            "link": getattr(inv, "link", ""),
-            "title": getattr(inv, "title", None) or getattr(inv, "link", ""),
-            "count": getattr(inv, "usage", None) or 0,
-        })
-    out.sort(key=lambda x: x["count"], reverse=True)
-    return out
-
-
 def write_json(name, obj):
     (OUT_DIR / name).write_text(json.dumps(obj, ensure_ascii=False, indent=2),
                                encoding="utf-8")
@@ -264,10 +251,8 @@ async def main():
         write_json("post_forwards.json", fwds)
         print(f"공유처    : {len(fwds)}개 포스트")
 
-        invites = await collect_invite_sources(client, ent)
-        write_json("invite_sources.json", invites)
         write_json("group_top_members.json", gr["top_members"])
-        print(f"유입 링크 : {len(invites)}개 · 활발 멤버 {len(gr['top_members'])}명\n")
+        print(f"활발 멤버 : {len(gr['top_members'])}명\n")
 
         # 포스트 CSV (대시보드 표/공유처 매칭용)
         posts_csv = OUT_DIR / f"channel_posts_{today}.csv"
@@ -287,19 +272,25 @@ async def main():
             with summary_csv.open(encoding="utf-8") as f:
                 for r in csv.DictReader(f):
                     existing[r["date"]] = r
-        existing[today] = {
-            "date": today,
-            "ch_subscribers": ch["subscribers"],
-            "ch_joined": "" if ch_joined is None else ch_joined,
-            "ch_left": "" if ch_left is None else ch_left,
-            "ch_new_posts": ch["new_posts"],
-            "ch_views": ch["views"],
-            "ch_forwards": ch["forwards"],
-            "ch_replies": ch["replies"],
-            "gr_members": gr["members"],
-            "gr_messages": gr["messages"],
-            "gr_active_users": gr["active_users"],
-        }
+        # B6 가드: 구독자/멤버는 항상 양수여야 하는 스냅샷 지표. 수집 실패로 0/None이면
+        # 오늘 행을 갱신하지 않고 옛 정상값을 보존(0 절벽 데이터 방지).
+        if not ch["subscribers"] or not gr["members"]:
+            print(f"!!! 핵심 지표 비정상(구독자={ch['subscribers']} 멤버={gr['members']}) "
+                  f"— daily_summary {today} 행 갱신 건너뜀(옛 값 보존)")
+        else:
+            existing[today] = {
+                "date": today,
+                "ch_subscribers": ch["subscribers"],
+                "ch_joined": "" if ch_joined is None else ch_joined,
+                "ch_left": "" if ch_left is None else ch_left,
+                "ch_new_posts": ch["new_posts"],
+                "ch_views": ch["views"],
+                "ch_forwards": ch["forwards"],
+                "ch_replies": ch["replies"],
+                "gr_members": gr["members"],
+                "gr_messages": gr["messages"],
+                "gr_active_users": gr["active_users"],
+            }
         rows = [{k: existing[d].get(k, "") for k in header} for d in sorted(existing)]
         with summary_csv.open("w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=header)
