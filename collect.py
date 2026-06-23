@@ -199,6 +199,70 @@ def write_json(name, obj):
                                encoding="utf-8")
 
 
+def _load_json(name, default=None):
+    p = OUT_DIR / name
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            return default
+    return default
+
+
+async def collect_group_member_diff(client, entity, detected_iso, history_limit=500):
+    """그룹은 admin log에 공개 가입이 안 남으므로, 멤버 명단 스냅샷을 매 수집마다
+    비교(diff)해서 '누가' 들어오고 나갔는지 추정한다.
+      - 첫 수집  : 기준선(baseline)만 저장, 이벤트 없음
+      - 이후 수집: 새 ID=유입, 사라진 ID=이탈 → 누적 history에 추가(감지 시각 기준)
+    명단 조회 불가(권한/대형 그룹 제한) 시 available=False.
+    주의: 수집 간격 사이 들어왔다 바로 나간 멤버는 잡지 못하며, 시각은 '감지 시각'이다."""
+    cur = {}
+    try:
+        async for u in client.iter_participants(entity):
+            cur[str(u.id)] = {
+                "name": _disp_name(u),
+                "username": getattr(u, "username", None),
+            }
+    except Exception as ex:
+        return {"available": False, "method": "snapshot",
+                "reason": f"{type(ex).__name__}: {ex}"}
+
+    # 직전 명단 스냅샷 + 기존 누적 이벤트 보존
+    prev = _load_json("group_members_snapshot.json")
+    existing = _load_json("join_leave_group.json", {})
+    history = existing.get("events", []) if isinstance(existing, dict) else []
+
+    snapshot = {"detected": detected_iso, "members": cur}
+
+    if not isinstance(prev, dict) or not prev.get("members"):
+        # 첫 수집 = 기준선만 저장 (diff는 다음 수집부터)
+        write_json("group_members_snapshot.json", snapshot)
+        return {"available": True, "method": "snapshot", "baseline": True,
+                "events": history, "member_count": len(cur)}
+
+    prev_members = prev["members"]
+    prev_ids, cur_ids = set(prev_members), set(cur)
+
+    new_events = []
+    for jid in (cur_ids - prev_ids):
+        info = cur[jid]
+        new_events.append({"date": detected_iso, "kind": "join",
+                           "name": info["name"], "username": info["username"],
+                           "id": int(jid)})
+    for lid in (prev_ids - cur_ids):
+        info = prev_members.get(lid, {})
+        new_events.append({"date": detected_iso, "kind": "left",
+                           "name": info.get("name"), "username": info.get("username"),
+                           "id": int(lid)})
+
+    events = (new_events + history)[:history_limit]   # 최신이 위로
+    write_json("group_members_snapshot.json", snapshot)
+    return {"available": True, "method": "snapshot", "baseline": False,
+            "events": events, "member_count": len(cur),
+            "new_join": sum(1 for e in new_events if e["kind"] == "join"),
+            "new_left": sum(1 for e in new_events if e["kind"] == "left")}
+
+
 async def main():
     # 1일 기준 = 한국시간(KST) 오전 9시 ~ 다음날 9시 = UTC 00:00 ~ 24:00.
     # 텔레그램 공식 통계 그래프가 UTC 일 버킷(=KST 9시)이므로 동일 기준으로 맞춘다.
@@ -236,16 +300,20 @@ async def main():
         else:
             print(f"유입/이탈 : 미수집 — {joinleave.get('reason', '')}")
 
+        # 그룹은 admin log에 공개 가입이 안 남으므로 멤버 명단 스냅샷 diff로 추정.
         gr_ent = await client.get_entity(GROUP)
-        joinleave_gr = await collect_join_leave(client, gr_ent)
+        joinleave_gr = await collect_group_member_diff(client, gr_ent,
+                                                       now_utc.isoformat())
         write_json("join_leave_group.json", joinleave_gr)
-        if joinleave_gr.get("available"):
-            evg = joinleave_gr["events"]
-            jng = sum(1 for e in evg if e["kind"] == "join")
-            lvg = sum(1 for e in evg if e["kind"] == "left")
-            print(f"그룹 유입/이탈 : 유입 {jng} · 이탈 {lvg} (admin log {len(evg)}건)")
-        else:
+        if not joinleave_gr.get("available"):
             print(f"그룹 유입/이탈 : 미수집 — {joinleave_gr.get('reason', '')}")
+        elif joinleave_gr.get("baseline"):
+            print(f"그룹 유입/이탈 : 기준선 저장 ({joinleave_gr.get('member_count', 0):,}명) "
+                  f"— 다음 수집부터 diff 표시")
+        else:
+            print(f"그룹 유입/이탈 : 이번 유입 {joinleave_gr.get('new_join', 0)} · "
+                  f"이탈 {joinleave_gr.get('new_left', 0)} "
+                  f"(누적 {len(joinleave_gr['events'])}건)")
 
         fwds = await collect_post_forwards(client, ent, posts)
         write_json("post_forwards.json", fwds)

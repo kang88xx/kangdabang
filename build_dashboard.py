@@ -268,6 +268,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   .jl-tag { display:inline-block; font-family:'Geist Mono',monospace; font-size:11px; padding:2px 8px; font-weight:600; }
   .jl-tag.join { color:var(--positive); border:1px solid #BFE0CF; }
   .jl-tag.left { color:var(--negative); border:1px solid #F0C9CD; }
+  .jl-note { font-size:12px; color:var(--ink-300); margin-bottom:12px; line-height:1.5; }
 
   /* placeholder / empty state */
   .empty { background:var(--white); border:1px dashed var(--line); padding:28px 24px;
@@ -411,6 +412,7 @@ TEMPLATE = r"""<!DOCTYPE html>
       <div id="topMembers"></div>
       <div id="grJoinLeaveWrap" hidden>
         <div class="eyebrow" style="margin:28px 0 12px;">유입 · 이탈 인원 (누가)</div>
+        <div id="grJlNote" class="jl-note"></div>
         <div id="joinLeaveGroup"></div>
       </div>
     </section>
@@ -792,14 +794,28 @@ function renderJoinLeave(box, src){
   }
 }
 renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
-// E7: 그룹 유입·이탈은 실제 이벤트가 있을 때만 노출 (admin log 구조상 거의 항상 빈값 → "고장" 인상 방지)
+// 그룹 유입·이탈은 admin log에 안 남으므로 멤버 명단 스냅샷 diff로 추정.
+// 수집 성공(available)이면 항상 노출하되, 방식의 한계를 캡션으로 안내한다.
 (function(){
   const wrap = document.getElementById('grJoinLeaveWrap');
-  const hasGr = JOINLEAVE_GR && JOINLEAVE_GR.available && Array.isArray(JOINLEAVE_GR.events) && JOINLEAVE_GR.events.length;
-  if (hasGr){
-    wrap.hidden = false;
-    renderJoinLeave(document.getElementById('joinLeaveGroup'), JOINLEAVE_GR);
+  const note = document.getElementById('grJlNote');
+  const src = JOINLEAVE_GR;
+  if (!(src && src.available)) return;              // 수집 실패 시에만 숨김
+  wrap.hidden = false;
+  const events = Array.isArray(src.events) ? src.events : [];
+  if (note){
+    note.innerHTML = '텔레그램 그룹은 가입/탈퇴가 관리자 로그에 남지 않아, '
+      + '<b>멤버 명단을 매 갱신마다 비교</b>해 추정합니다. '
+      + '시각은 <b>감지된 시점</b>(정확한 가입·탈퇴 순간이 아님)이며, '
+      + '갱신 사이에 들어왔다 바로 나간 멤버는 누락될 수 있습니다.'
+      + (!events.length
+          ? '<br><b>' + (src.baseline ? '기준선을 저장했습니다 — ' : '')
+            + '다음 갱신부터 유입·이탈이 표시됩니다.</b>'
+          : '');
   }
+  const box = document.getElementById('joinLeaveGroup');
+  if (events.length) renderJoinLeave(box, src);    // 표는 이벤트가 있을 때만
+  else if (box) box.innerHTML = '';                // 빈값이면 캡션만 노출
 })();
 
 // ---------- 06 활발한 멤버 (10명씩 페이지네이션) ----------
