@@ -312,7 +312,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     <div class="rail-in">
       <span>KANGTEAROOM DATA</span>
       <span class="mid"><a class="chlink" href="https://t.me/__CHUSER__" target="_blank" rel="noopener">@__CHUSER__</a> · <a class="chlink" href="https://t.me/__GRUSER__" target="_blank" rel="noopener">@__GRUSER__</a></span>
-      <span class="end"><span id="lastUpdated">__END__</span><button id="refreshBtn" class="refresh-btn" hidden>🔄 지금 갱신</button></span>
+      <span class="end"><span id="lastUpdated">최종 업데이트 __GENERATED__ KST</span><button id="refreshBtn" class="refresh-btn" hidden>🔄 지금 갱신</button></span>
     </div>
   </div>
   <div id="refreshToast" class="refresh-toast" role="status" aria-live="polite" hidden></div>
@@ -870,6 +870,7 @@ def main():
 
     html = (TEMPLATE
             .replace("__FAVICON__", favicon)
+            .replace("__GENERATED__", datetime.now(KST).strftime("%Y-%m-%d %H:%M"))
             .replace("__END__", rows[-1]["date"])
             .replace("__CHUSER__", CH_USER)
             .replace("__GRUSER__", GR_USER)
