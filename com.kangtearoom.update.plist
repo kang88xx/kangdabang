@@ -20,8 +20,11 @@
     <dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
   </array>
 
+  <!-- 노트북은 예약 시각에 꺼져/잠들어 있을 수 있다. launchd는 꺼진 Mac을 깨우지 못하므로
+       RunAtLoad=true 로 로그인/부팅 직후 1회 실행해 놓친 회차를 보충한다.
+       (잠자기 중 놓친 회차는 깨어날 때 launchd가 자동으로 1회 따라잡음) -->
   <key>RunAtLoad</key>
-  <false/>
+  <true/>
 
   <key>StandardOutPath</key>
   <string>/Users/henry/telegram-stats/data/launchd.log</string>
