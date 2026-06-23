@@ -170,10 +170,10 @@ TEMPLATE = r"""<!DOCTYPE html>
 
   /* domain tag */
   .dtag { display:inline-block; font-family:'Geist Mono',monospace; font-size:10.5px;
-    letter-spacing:.12em; text-transform:uppercase; padding:3px 8px; border:1px solid var(--line);
-    color:var(--ink-500); margin-left:auto; align-self:center; }
-  .dtag.ch { color:var(--forest-500); border-color:var(--forest-300); }
-  .dtag.gr { color:var(--info); border-color:#BcdAE8; }
+    letter-spacing:.12em; text-transform:uppercase; padding:3px 8px; border:1px solid transparent;
+    color:#fff; margin-left:auto; align-self:center; }
+  .dtag.ch { background:var(--forest-500); border-color:var(--forest-500); }
+  .dtag.gr { background:var(--info); border-color:var(--info); }
 
   /* KPI CARDS */
   .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
@@ -229,14 +229,6 @@ TEMPLATE = r"""<!DOCTYPE html>
   .note-box dd { margin:0; font-size:13.5px; line-height:1.55; color:var(--ink-700); }
   .note-box dd code { font-family:'Geist Mono',monospace; font-size:12px; background:var(--forest-100);
     padding:1px 5px; color:var(--forest-700); }
-  /* 채움형(reverse) — 녹색 배경 + 배경(연한)색 텍스트 */
-  .note-box.filled { background:var(--forest-700); border-color:var(--forest-700); border-left-color:var(--signal); color:var(--paper); }
-  .note-box.filled h4 { color:var(--paper); }
-  .note-box.filled h4 code { background:rgba(255,255,255,.14); color:var(--signal); }
-  .note-box.filled dt { color:var(--forest-300); }
-  .note-box.filled dd { color:rgba(244,246,242,.92); }
-  .note-box.filled dd b { color:#fff; }
-  .note-box.filled dd code { background:rgba(255,255,255,.14); color:var(--forest-100); }
 
   /* TABLE */
   .table-wrap { background:var(--white); border:1px solid var(--line); overflow-x:auto; }
@@ -399,17 +391,6 @@ TEMPLATE = r"""<!DOCTYPE html>
       <div class="sec-head">
         <div><div class="eyebrow">Channel · Official</div><h2>채널 — 공식 통계</h2></div>
         <span class="dtag ch">@__CHUSER__</span>
-      </div>
-      <div class="note-box filled">
-        <h4>텔레그램 공식 통계 — <code>stats.GetBroadcastStats</code></h4>
-        <dl>
-          <dt>제공 데이터</dt>
-          <dd>구독자 성장 그래프, <b>조회 출처</b>(채널/검색/공유/링크), 알림 끈 비율(mute), 시간대별 조회, 게시물별 노출 등 — 텔레그램이 직접 집계한 값입니다.</dd>
-          <dt>이용 조건</dt>
-          <dd>채널 규모가 <b>일정 이상(보통 구독자 50~500+)</b>이어야 API가 데이터를 반환합니다. 그 미만이면 “통계 미생성” 상태입니다.</dd>
-          <dt>권한</dt>
-          <dd>채널 <b>관리자</b> 계정으로만 호출 가능합니다.</dd>
-        </dl>
       </div>
       <div id="officialStats"></div>
     </section>
