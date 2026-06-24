@@ -323,7 +323,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 
   <main>
 
-    <div class="basis-note">데이터 기준 · <b>한국시간(KST) 오전 9시 ~ 다음날 09시 = 1일(24시간)</b> · 하루 4회 자동 갱신</div>
+    <div class="basis-note">데이터 기준 · <b>한국시간(KST) 오전 9시 ~ 다음날 09시 = 1일(24시간)</b> · 하루 48회 자동 갱신</div>
 
     <!-- 01 OVERVIEW -->
     <section>
