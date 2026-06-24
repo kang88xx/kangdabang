@@ -11,10 +11,14 @@
     <string>/Users/henry/telegram-stats/update.sh</string>
   </array>
 
-  <!-- 매시 정각(하루 24회) + KST 08:55(직전 날 24시간 마감 수집). Minute만 주면 매시간 실행됨 -->
+  <!-- 매시 0분·30분(하루 48회) + KST 08:55(직전 날 24시간 마감 수집).
+       30분 주기 근거: 구독자/조회/멤버 수는 일 단위로 쌓여 더 촘촘히 긁어도 새 신호가 거의 없고,
+       유저별 get_entity·전체 명단 diff 등 무거운 호출의 텔레그램 FloodWait 위험을 안전권으로 유지.
+       (배포 48회/일은 Vercel 한도 안. 현재 Pro 플랜이므로 더 자주도 가능하나 부하상 30분 권장.) -->
   <key>StartCalendarInterval</key>
   <array>
     <dict><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Minute</key><integer>30</integer></dict>
     <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>55</integer></dict>
   </array>
 
