@@ -1,6 +1,6 @@
 #!/bin/zsh
-# 캉티룸 통계 자동 업데이트 — git pull(코드 동기화) → collect.py(수집) → build_dashboard.py → site 복사 → Vercel 배포
-# launchd(com.kangtearoom.update)가 매시 정각(하루 24회) + KST 08:55(전날 24시간 마감) 실행한다.
+# 캉다방 통계 자동 업데이트 — git pull(코드 동기화) → collect.py(수집) → build_dashboard.py → site 복사 → Vercel 배포
+# launchd(com.kangtearoom.update)가 매시 0분·30분(하루 48회) + KST 08:55(전날 24시간 마감) 실행한다.
 # 로그: data/update.log
 #
 # 실패 게이트: 수집/빌드가 실패하거나 오늘 데이터가 비면 배포를 건너뛰고 맥 알림을 띄운다.
