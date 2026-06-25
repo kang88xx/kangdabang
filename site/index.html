@@ -278,7 +278,7 @@
     <div class="rail-in">
       <span>KANGTEAROOM DATA</span>
       <span class="mid"><a class="chlink" href="https://t.me/kang_tearoom" target="_blank" rel="noopener">@kang_tearoom</a> · <a class="chlink" href="https://t.me/kangtearoom_chat" target="_blank" rel="noopener">@kangtearoom_chat</a></span>
-      <span class="end"><span id="lastUpdated">최종 업데이트 2026-06-25 11:21 KST</span><button id="refreshBtn" class="refresh-btn" hidden>지금 갱신</button><span id="userChip" hidden><span class="who"></span><button type="button" id="logoutBtn" class="logout-btn">로그아웃</button></span></span>
+      <span class="end"><span id="lastUpdated">최종 업데이트 2026-06-25 11:56 KST</span><button id="refreshBtn" class="refresh-btn" hidden>지금 갱신</button><span id="userChip" hidden><span class="who"></span><button type="button" id="logoutBtn" class="logout-btn">로그아웃</button></span></span>
     </div>
   </div>
   <div id="refreshToast" class="refresh-toast" role="status" aria-live="polite" hidden></div>
@@ -400,14 +400,15 @@
         <div><div class="eyebrow">Admin · Access</div><h2>접속 로그 — 사용 현황</h2></div>
         <button type="button" id="logRefresh" class="dtag" style="background:var(--ink-900);border:none;cursor:pointer;">새로고침</button>
       </div>
-      <div class="eyebrow" style="margin-bottom:12px;">계정별 사용량 — 접속 횟수 순</div>
-      <div class="cards" id="accessCards" style="margin-bottom:28px;"></div>
-      <div class="eyebrow" style="margin-bottom:12px;">상세 타임라인 — 누가 · 언제 (로그인/사용) · 최신순</div>
+      <div class="eyebrow" style="margin-bottom:12px;">계정 선택 — 탭을 누르면 해당 계정만 표시 (계정은 자동 생성)</div>
+      <div class="tabs" id="accessTabs"></div>
+      <div id="accessSummary" style="font-family:'Geist Mono',monospace;font-size:13px;letter-spacing:.01em;color:var(--ink-500);margin:2px 0 16px;min-height:18px;"></div>
       <div class="table-wrap">
         <table><thead><tr>
           <th class="l">계정</th><th>유형</th><th>날짜</th><th>시각</th>
         </tr></thead><tbody id="accessLog"></tbody></table>
       </div>
+      <div class="pager" id="accessPager"></div>
       <div class="access-foot" id="accessFoot"></div>
     </section>
 
@@ -930,10 +931,13 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
     location.reload();
   });
 
+  let logFilter = '__all';   // 선택된 계정 탭(자동 갱신해도 유지)
   async function loadLogs(){
-    const cards = document.getElementById('accessCards');
-    const tbody = document.getElementById('accessLog');
-    const foot  = document.getElementById('accessFoot');
+    const tabsBox = document.getElementById('accessTabs');
+    const summary = document.getElementById('accessSummary');
+    const tbody   = document.getElementById('accessLog');
+    const pager   = document.getElementById('accessPager');
+    const foot    = document.getElementById('accessFoot');
     let d;
     try{
       const r = await fetch('/api/logs');
@@ -942,28 +946,47 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
     }catch(e){ foot.textContent='로그 요청 실패.'; return; }
 
     if (d.kvReady === false){
-      cards.innerHTML = `<div class="empty" style="grid-column:1/-1;"><div class="tag">KV not connected</div>
-        <b>로그 저장소(KV) 미연동</b><br>Vercel KV 연결 후 접속 로그가 집계됩니다.</div>`;
-      tbody.innerHTML = `<tr><td class="l" colspan="4" style="text-align:center;color:var(--ink-300);padding:24px;">데이터 없음</td></tr>`;
-      foot.textContent=''; return;
+      tabsBox.innerHTML=''; summary.innerHTML='';
+      tbody.innerHTML = `<tr><td class="l" colspan="4" style="text-align:center;color:var(--ink-300);padding:24px;">로그 저장소(KV) 미연동 — 연결 후 표시됩니다.</td></tr>`;
+      pager.innerHTML=''; foot.textContent=''; return;
     }
-    const users = d.users || [];
-    cards.innerHTML = users.length ? users.map(u=>`
-      <div class="card">
-        <div class="label">${esc(u.user)}${u.role==='master'?' · 마스터':''}</div>
-        <div class="value">${fmt(u.total)}</div>
-        <div class="delta" style="color:var(--ink-500);font-weight:400;">로그인 ${fmt(u.logins)} · 사용 ${fmt(u.pings)}<br>최근 ${kstDate(u.last)} ${kstTime(u.last)}</div>
-      </div>`).join('') : `<div class="empty" style="grid-column:1/-1;"><b>아직 접속 기록이 없습니다.</b></div>`;
 
-    const evs = d.events || [];
-    tbody.innerHTML = evs.length ? evs.map(ev=>`
+    const users = d.users || [];      // 모든 계정(0건 포함), 접속 횟수 순
+    const evs   = d.events || [];
+    const total = d.total || evs.length;
+    if (!users.some(u=>u.user===logFilter)) logFilter = '__all';   // 사라진 계정 선택 방어
+
+    // 탭: 전체 + 계정별 (계정 추가 시 자동 생성)
+    tabsBox.innerHTML = [`<button class="tab" data-u="__all">전체 ${fmt(total)}</button>`]
+      .concat(users.map(u=>`<button class="tab" data-u="${esc(u.user)}">${esc(u.user)}${u.role==='master'?' · 마스터':''} ${fmt(u.total)}</button>`))
+      .join('');
+
+    const rowFn = ev => `
       <tr>
         <td class="l">${esc(ev.u)}</td>
         <td><span class="ttag ${ev.type==='login'?'login':'ping'}">${ev.type==='login'?'로그인':'사용'}</span></td>
         <td>${kstDate(ev.ts)}</td>
         <td>${kstTime(ev.ts)}</td>
-      </tr>`).join('') : `<tr><td class="l" colspan="4" style="text-align:center;color:var(--ink-300);padding:24px;">기록 없음</td></tr>`;
-    foot.textContent = `총 ${fmt(d.total||evs.length)}건 기록 · 표시 ${evs.length}건 · 60초마다 자동 갱신`;
+      </tr>`;
+
+    function apply(user){
+      logFilter = user;
+      tabsBox.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.u===user));
+      if (user==='__all'){
+        summary.innerHTML = `<b style="color:var(--forest-700);">전체</b> · 총 ${fmt(total)}건 · 계정 ${fmt(users.length)}개`;
+      } else {
+        const u = users.find(x=>x.user===user);
+        summary.innerHTML = (u && u.total)
+          ? `<b style="color:var(--forest-700);">${esc(u.user)}</b>${u.role==='master'?' · 마스터':''} · 총 ${fmt(u.total)} · 로그인 ${fmt(u.logins)} · 사용 ${fmt(u.pings)} · 최근 ${kstDate(u.last)} ${kstTime(u.last)}`
+          : `<b style="color:var(--forest-700);">${esc(user)}</b> · 접속 기록 없음`;
+      }
+      const items = user==='__all' ? evs : evs.filter(e=>e.u===user);
+      if (items.length) paginate(tbody, pager, items, 12, rowFn);
+      else { tbody.innerHTML = `<tr><td class="l" colspan="4" style="text-align:center;color:var(--ink-300);padding:24px;">기록 없음</td></tr>`; pager.innerHTML=''; }
+    }
+    tabsBox.onclick = ev => { const t = ev.target.closest('.tab'); if(!t) return; apply(t.dataset.u); };
+    apply(logFilter);
+    foot.textContent = `총 ${fmt(total)}건 · 표시 ${evs.length}건 · 60초마다 자동 갱신`;
   }
   document.getElementById('logRefresh').addEventListener('click', loadLogs);
 })();
