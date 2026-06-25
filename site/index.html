@@ -53,6 +53,48 @@
     box-shadow:0 8px 28px rgba(0,0,0,.28); max-width:340px; white-space:pre-line; }
   .refresh-toast.err { border-left-color:#E5484D; }
 
+  /* ── 로그인 게이트 ───────────────────────────────────────── */
+  /* 잠금 중엔 스크롤만 막고, 본문은 레이아웃을 유지(차트가 0px로 그려지는 문제 방지)한 채
+     불투명 오버레이로 가린다. 로그인 성공 시 오버레이만 제거하면 차트가 정상 크기로 보인다. */
+  body.auth-lock { overflow:hidden; }
+  #authOverlay { position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(120% 120% at 50% 0%, #0B3A2C 0%, #061B14 70%); padding:24px; }
+  #authOverlay[hidden] { display:none; }
+  .auth-card { width:100%; max-width:360px; background:var(--white); border:1px solid var(--line);
+    padding:34px 30px 28px; box-shadow:0 24px 60px rgba(0,0,0,.4); }
+  .auth-card .brand { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--signal); margin-bottom:6px; }
+  .auth-card h1 { margin:0 0 4px; font-size:22px; font-weight:600; letter-spacing:-.02em; }
+  .auth-card .sub { font-size:12.5px; color:var(--ink-500); margin-bottom:22px; }
+  .auth-card label { display:block; font-family:'Geist Mono',monospace; font-size:10.5px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-500); margin:0 0 6px; }
+  .auth-card input { width:100%; padding:11px 12px; font-size:14px; font-family:inherit;
+    border:1px solid var(--line); background:var(--paper); color:var(--ink-900); margin-bottom:16px; }
+  .auth-card input:focus { outline:none; border-color:var(--forest-500); background:#fff; }
+  .auth-card button { width:100%; padding:12px; font-family:'Geist Mono',monospace; font-size:12px;
+    letter-spacing:.12em; text-transform:uppercase; color:#fff; background:var(--forest-900);
+    border:none; cursor:pointer; transition:background .15s; }
+  .auth-card button:hover { background:var(--forest-700); }
+  .auth-card button:disabled { opacity:.55; cursor:progress; }
+  .auth-err { color:var(--negative); font-size:12.5px; min-height:18px; margin-bottom:6px; }
+
+  /* 상단 계정 칩 + 로그아웃 */
+  #userChip { display:flex; gap:9px; align-items:center; }
+  #userChip .who { color:#fff; text-transform:none; letter-spacing:.02em; }
+  #userChip .who b { color:var(--signal); }
+  .logout-btn { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.12em;
+    text-transform:uppercase; color:rgba(255,255,255,.82); background:transparent;
+    border:1px solid rgba(255,255,255,.3); padding:4px 9px; cursor:pointer; transition:all .15s; }
+  .logout-btn:hover { color:#fff; border-color:var(--signal); }
+
+  /* ── 07b 접속 로그 (마스터 전용) ─────────────────────────── */
+  .access-foot { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.04em;
+    color:var(--ink-500); margin-top:10px; }
+  .ttag { display:inline-block; font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.08em;
+    text-transform:uppercase; padding:2px 7px; color:#fff; }
+  .ttag.login { background:var(--forest-500); }
+  .ttag.ping { background:var(--info); }
+
   /* (헤더 cover 제거됨 — 상단 정보는 .rail 로 통합) */
 
   main { max-width:1180px; margin:0 auto; padding:40px 64px 0; }
@@ -79,6 +121,7 @@
     color:#fff; margin-left:auto; align-self:center; }
   .dtag.ch { background:var(--forest-500); border-color:var(--forest-500); }
   .dtag.gr { background:var(--info); border-color:var(--info); }
+  .dtag.cobak { background:#1652f0; border-color:#1652f0; color:#fff; text-decoration:none; }
 
   /* KPI CARDS */
   .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
@@ -215,13 +258,27 @@
     .modal-body th, .modal-body td { padding:9px 10px; } }
 </style>
 </head>
-<body>
+<body class="auth-lock">
+
+  <div id="authOverlay">
+    <form class="auth-card" id="authForm" autocomplete="off">
+      <div class="brand">Kangtearoom · Internal</div>
+      <h1>캉다방 통계</h1>
+      <div class="sub">내부 전용 — 계정으로 로그인하세요.</div>
+      <label for="authUser">아이디</label>
+      <input id="authUser" name="username" type="text" autocomplete="username" autofocus>
+      <label for="authPass">비밀번호</label>
+      <input id="authPass" name="password" type="password" autocomplete="current-password">
+      <div class="auth-err" id="authErr"></div>
+      <button type="submit" id="authBtn">로그인</button>
+    </form>
+  </div>
 
   <div class="rail">
     <div class="rail-in">
       <span>KANGTEAROOM DATA</span>
       <span class="mid"><a class="chlink" href="https://t.me/kang_tearoom" target="_blank" rel="noopener">@kang_tearoom</a> · <a class="chlink" href="https://t.me/kangtearoom_chat" target="_blank" rel="noopener">@kangtearoom_chat</a></span>
-      <span class="end"><span id="lastUpdated">최종 업데이트 2026-06-23 18:02 KST</span><button id="refreshBtn" class="refresh-btn" hidden>지금 갱신</button></span>
+      <span class="end"><span id="lastUpdated">최종 업데이트 2026-06-25 11:10 KST</span><button id="refreshBtn" class="refresh-btn" hidden>지금 갱신</button><span id="userChip" hidden><span class="who"></span><button type="button" id="logoutBtn" class="logout-btn">로그아웃</button></span></span>
     </div>
   </div>
   <div id="refreshToast" class="refresh-toast" role="status" aria-live="polite" hidden></div>
@@ -322,7 +379,37 @@
       </div>
     </section>
 
+    <!-- 07 코박 활동 -->
+    <section id="sec-cobak">
+      <div class="sec-head">
+        <div><div class="eyebrow">Community · Cobak</div><h2>코박 활동 — 캉다방</h2></div>
+        <a class="dtag cobak" id="cobakTag" href="https://cobak.co/" target="_blank" rel="noopener">cobak.co</a>
+      </div>
+      <div class="cards" id="cobakCards" style="margin-bottom:24px;"></div>
+      <div class="eyebrow" style="margin-bottom:12px;">게시글 목록 — 최신순 (제목 클릭 시 코박에서 열림)</div>
+      <div class="table-wrap">
+        <table><thead><tr>
+          <th class="l">게시물</th><th>날짜</th><th>시각</th><th>조회수</th><th>추천</th><th>댓글</th>
+        </tr></thead><tbody id="cobakPosts"></tbody></table>
+      </div>
+    </section>
 
+    <!-- 08 접속 로그 (마스터 전용) -->
+    <section id="sec-access" hidden>
+      <div class="sec-head">
+        <div><div class="eyebrow">Admin · Access</div><h2>접속 로그 — 사용 현황</h2></div>
+        <button type="button" id="logRefresh" class="dtag" style="background:var(--ink-900);border:none;cursor:pointer;">새로고침</button>
+      </div>
+      <div class="eyebrow" style="margin-bottom:12px;">계정별 사용량 — 접속 횟수 순</div>
+      <div class="cards" id="accessCards" style="margin-bottom:28px;"></div>
+      <div class="eyebrow" style="margin-bottom:12px;">상세 타임라인 — 누가 · 언제 (로그인/사용) · 최신순</div>
+      <div class="table-wrap">
+        <table><thead><tr>
+          <th class="l">계정</th><th>유형</th><th>날짜</th><th>시각</th>
+        </tr></thead><tbody id="accessLog"></tbody></table>
+      </div>
+      <div class="access-foot" id="accessFoot"></div>
+    </section>
 
   </main>
 
@@ -349,6 +436,7 @@ const POSTS    = [{"id": 2186, "date": "2026-06-23", "time": "14:55", "views": 2
 const OFFICIAL = {"available": true, "metrics": {"구독자 (공식)": 5274, "게시물당 평균 조회": 224, "게시물당 평균 공유": 0, "게시물당 평균 반응": 1, "알림 켠 인원": "3,287 / 5,274", "음소거 비율": "37.7%"}, "period_days": 0};
 const MEMBERS  = [{"id": 8746119811, "name": "Z초롱", "username": "RealGg331", "count": 119}, {"id": 7072826528, "name": "뚝따기아빠 WITCH✨ Solstice✨ PrediX✨", "username": "daeseonhan", "count": 51}, {"id": 6801051497, "name": "Goldwhale", "username": "Goldwhale82", "count": 23}, {"id": 6067957691, "name": "woni 🎮MGG ✨PrediX", "username": "n_tester", "count": 21}, {"id": 966326932, "name": "거북선l☕️캉다방 l Vizo l 🧙‍♂️witch", "username": "hihihi111999", "count": 11}, {"id": 5966366962, "name": "MGG_내 신상 명품지갑 리워디_River", "username": "kzipoop", "count": 8}, {"id": 5086407258, "name": "교권보호국 감독관 뽀둥", "username": "bbijim", "count": 8}, {"id": 7442677851, "name": "WITCH | 헐크 VIZO ✨PrediX Limitless♾️ ☕️캉다방", "username": "jjang0123", "count": 7}, {"id": -1003529944235, "name": "캉다방", "username": "kang_tearoom", "count": 4}, {"id": 6495297901, "name": "캉", "username": "kangtearoom", "count": 3}, {"id": 6796523302, "name": "smile 🎮 Limitless♾️ | WITCH | Vizoㅣ✨PrediX | MGG", "username": "hcm6523", "count": 2}, {"id": 909944660, "name": "lucky ✨PrediX |🎮MGG | Vizo | Limitless♾️ |", "username": "simsimh", "count": 2}, {"id": 8333287406, "name": "성우 🎮MGG박", "username": "eh01psw1", "count": 2}, {"id": 1272359414, "name": "강복순 | 갸웃갸웃", "username": "elp9511", "count": 1}, {"id": 5420444505, "name": "Ξ STAR BOT🤖", "username": "NFT_Help_Bot", "count": 1}, {"id": 2021155800, "name": "kang", "username": "kang88xx", "count": 1}];
 
+const COBAK    = {"available": true, "nickname": "캉다방", "user_id": 575132, "source_url": "https://cobak.co/ko/community/3/post/2044104", "totals": {"posts": 8, "views": 955, "recommend": 128, "comments": 8}, "posts": [{"id": 2044104, "title": "오늘의 크립토 소식 TOP 5", "url": "https://cobak.co/ko/community/3/post/2044104", "views": 39, "recommend": 12, "comments": 0, "date": "2026-06-25", "time": "09:04"}, {"id": 2012609, "title": "📣 오늘의 크립토 소식 TOP 5", "url": "https://cobak.co/ko/community/3/post/2012609", "views": 133, "recommend": 28, "comments": 0, "date": "2026-06-01", "time": "15:40"}, {"id": 2011675, "title": "📣 오늘의 크립토 소식 TOP 5", "url": "https://cobak.co/ko/community/3/post/2011675", "views": 107, "recommend": 13, "comments": 0, "date": "2026-05-31", "time": "15:30"}, {"id": 2010962, "title": "5월의 마지막 주말이네요", "url": "https://cobak.co/ko/community/7/post/2010962", "views": 101, "recommend": 30, "comments": 1, "date": "2026-05-30", "time": "13:36"}, {"id": 2010960, "title": "📣 오늘의 크립토 소식 TOP 5", "url": "https://cobak.co/ko/community/3/post/2010960", "views": 183, "recommend": 19, "comments": 1, "date": "2026-05-30", "time": "13:34"}, {"id": 2009556, "title": "📣 오늘의 크립토 소식 TOP 5", "url": "https://cobak.co/ko/community/3/post/2009556", "views": 170, "recommend": 10, "comments": 3, "date": "2026-05-29", "time": "10:52"}, {"id": 2008064, "title": "오늘의 크립토 소식 TOP 5", "url": "https://cobak.co/ko/community/3/post/2008064", "views": 103, "recommend": 4, "comments": 2, "date": "2026-05-28", "time": "10:58"}, {"id": 2006133, "title": "📣 오늘의 크립토 소식 TOP 5", "url": "https://cobak.co/ko/community/3/post/2006133", "views": 119, "recommend": 12, "comments": 1, "date": "2026-05-27", "time": "02:10"}], "generated": "2026-06-25 10:46"};      // { available, nickname, totals:{posts,views,recommend,comments}, posts:[{id,title,url,views,recommend,comments,date}] }
 const JOINLEAVE= {"available": true, "events": [{"date": "2026-06-23T06:59:33+00:00", "kind": "left", "name": "אורן אברמוב", "username": null, "id": 6310407150}, {"date": "2026-06-23T04:34:16+00:00", "kind": "left", "name": "אביב בן־דוד", "username": null, "id": 8791040102}, {"date": "2026-06-23T03:46:07+00:00", "kind": "left", "name": "יוסי אלבז", "username": null, "id": 5460537119}, {"date": "2026-06-22T23:54:28+00:00", "kind": "left", "name": "הודיה סלע", "username": null, "id": 7493988397}, {"date": "2026-06-22T21:43:36+00:00", "kind": "left", "name": "Russell Ivan Mondano", "username": null, "id": 6992155702}, {"date": "2026-06-22T21:42:40+00:00", "kind": "left", "name": "Санталат Фазлиевна", "username": null, "id": 430889815}, {"date": "2026-06-22T21:38:09+00:00", "kind": "left", "name": "Ульяна", "username": "Heyehyeyeyeh", "id": 8109662066}, {"date": "2026-06-22T21:37:30+00:00", "kind": "left", "name": "Djigo Ftk", "username": null, "id": 7767602131}, {"date": "2026-06-22T21:32:02+00:00", "kind": "left", "name": "Stephen", "username": "srephanchik", "id": 8220693117}, {"date": "2026-06-22T21:30:55+00:00", "kind": "left", "name": "Main Kaef", "username": null, "id": 8479705703}, {"date": "2026-06-22T21:30:46+00:00", "kind": "left", "name": "سيف الدين النعيمي", "username": null, "id": 6764712964}, {"date": "2026-06-22T21:30:03+00:00", "kind": "left", "name": "Sharma Yare ✌🏾👀", "username": null, "id": 6441693108}, {"date": "2026-06-22T21:29:53+00:00", "kind": "left", "name": "Dinith Induwara", "username": null, "id": 8461663436}, {"date": "2026-06-22T21:29:49+00:00", "kind": "left", "name": "Yılmaz 21 Yılmaz 21", "username": null, "id": 7438541670}, {"date": "2026-06-22T21:29:45+00:00", "kind": "left", "name": "Robert Fontaine", "username": null, "id": 8404045376}, {"date": "2026-06-22T21:29:40+00:00", "kind": "left", "name": "علوش", "username": null, "id": 6566520927}, {"date": "2026-06-22T21:23:57+00:00", "kind": "left", "name": "Ronel Contiga", "username": null, "id": 8382182884}, {"date": "2026-06-22T21:20:32+00:00", "kind": "left", "name": "ام احمد", "username": null, "id": 6787033892}, {"date": "2026-06-22T21:20:19+00:00", "kind": "left", "name": "专业拉TG群联系@cooop", "username": "NkGdSsksayfEtKGYwOw", "id": 6994910339}, {"date": "2026-06-22T21:15:16+00:00", "kind": "left", "name": "Tanongsak Wongkerd", "username": "SDJWEED9", "id": 6102418796}, {"date": "2026-06-22T21:15:12+00:00", "kind": "left", "name": "Bsbsj Babsb", "username": null, "id": 7302728309}, {"date": "2026-06-22T21:14:39+00:00", "kind": "left", "name": "633331", "username": null, "id": 6172498180}, {"date": "2026-06-22T21:10:52+00:00", "kind": "left", "name": "h 46", "username": null, "id": 7661628144}, {"date": "2026-06-22T21:09:02+00:00", "kind": "left", "name": "Maxlovezaza55 Maxlovezaza55", "username": null, "id": 6528168249}, {"date": "2026-06-22T21:08:53+00:00", "kind": "left", "name": "Ансар", "username": "Ansarrrrrrrrd", "id": 8205887157}, {"date": "2026-06-22T21:06:36+00:00", "kind": "left", "name": "Gaji Sohag", "username": null, "id": 8434513216}, {"date": "2026-06-22T21:00:53+00:00", "kind": "left", "name": "chanchai2539", "username": "chanchai2539", "id": 5780405663}, {"date": "2026-06-22T21:00:45+00:00", "kind": "left", "name": "GARZEL De Guzman", "username": null, "id": 8277656485}, {"date": "2026-06-22T21:00:33+00:00", "kind": "left", "name": "Adat Adat", "username": null, "id": 5679334829}, {"date": "2026-06-22T20:58:55+00:00", "kind": "left", "name": "..... ....", "username": null, "id": 7225321601}, {"date": "2026-06-22T20:58:40+00:00", "kind": "left", "name": "Rubén Díaz", "username": null, "id": 8481458344}, {"date": "2026-06-22T20:58:34+00:00", "kind": "left", "name": "Григорий Кошелев", "username": null, "id": 7015579869}, {"date": "2026-06-22T19:28:33+00:00", "kind": "left", "name": "רות הראל", "username": null, "id": 8995874460}, {"date": "2026-06-22T16:03:44+00:00", "kind": "left", "name": "Diego", "username": "Dieg045", "id": 7496968447}, {"date": "2026-06-22T15:56:50+00:00", "kind": "left", "name": "M K", "username": "Mk34467", "id": 2019955980}, {"date": "2026-06-22T14:28:46+00:00", "kind": "left", "name": "רן סלע", "username": null, "id": 8555069752}, {"date": "2026-06-22T13:25:20+00:00", "kind": "left", "name": "Esi Esinam", "username": "Esigosu276", "id": 2078563668}, {"date": "2026-06-22T13:23:07+00:00", "kind": "left", "name": "Sloane Barrett", "username": "velvj23kglow7952", "id": 7809865338}, {"date": "2026-06-22T11:58:14+00:00", "kind": "left", "name": "אופיר בן־חור", "username": null, "id": 7283818259}, {"date": "2026-06-21T23:46:46+00:00", "kind": "left", "name": "נועם סלע", "username": "MplApzQIyoItz", "id": 8716244738}, {"date": "2026-06-21T17:03:07+00:00", "kind": "left", "name": "אביב דיין", "username": null, "id": 6506204095}, {"date": "2026-06-21T16:48:18+00:00", "kind": "left", "name": "נתנאל בן־שחר", "username": null, "id": 5198080870}]};  // { available, events:[{date,kind,name,username,id}] }
 const JOINLEAVE_GR = {"available": true, "events": []};  // 그룹 유입·이탈
 const CH_USER  = "kang_tearoom";
@@ -742,6 +830,142 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
     box.innerHTML = `<div class="empty"><div class="tag">No member data</div>
       <b>활발한 멤버 데이터 없음</b><br>collect.py가 그룹 발화 집계를 저장하면 표시됩니다.</div>`;
   }
+})();
+
+// ---------- 07 코박 활동 (캉다방) ----------
+(function(){
+  const cardsBox = document.getElementById('cobakCards');
+  const body     = document.getElementById('cobakPosts');
+  if (!COBAK || !COBAK.available) {
+    cardsBox.innerHTML = `<div class="empty" style="grid-column:1/-1;"><div class="tag">No cobak data</div>
+      <b>코박 활동 데이터 없음</b><br>cobak.py 실행 후 표시됩니다.</div>`;
+    return;
+  }
+  const t = COBAK.totals || {};
+  const tag = document.getElementById('cobakTag');
+  if (tag && COBAK.source_url) tag.href = COBAK.source_url;
+
+  cardsBox.innerHTML = [
+    {label:'총 게시글', val:t.posts},
+    {label:'총 뷰',     val:t.views},
+    {label:'총 추천',   val:t.recommend},
+    {label:'총 댓글',   val:t.comments},
+  ].map(c=>`<div class="card"><div class="label">${c.label}</div><div class="value">${fmt(c.val||0)}</div></div>`).join('');
+
+  const posts = COBAK.posts || [];
+  if (posts.length) {
+    body.innerHTML = posts.map(p=>`
+      <tr>
+        <td class="l"><a class="post" href="${p.url}" target="_blank" rel="noopener">${esc(p.title)}</a></td>
+        <td>${(p.date||'').slice(5)}</td>
+        <td>${p.time||''}</td>
+        <td>${fmt(p.views)}</td>
+        <td>${fmt(p.recommend)}</td>
+        <td>${fmt(p.comments)}</td>
+      </tr>`).join('');
+  } else {
+    body.innerHTML = `<tr><td class="l" colspan="6" style="text-align:center;color:var(--ink-300);padding:24px;">게시글 없음</td></tr>`;
+  }
+})();
+
+// ---------- 인증 게이트 + 접속 로그(마스터) ----------
+(function(){
+  const body      = document.body;
+  const overlay   = document.getElementById('authOverlay');
+  const form      = document.getElementById('authForm');
+  const userInput = document.getElementById('authUser');
+  const passInput = document.getElementById('authPass');
+  const errBox    = document.getElementById('authErr');
+  const btn       = document.getElementById('authBtn');
+  const chip      = document.getElementById('userChip');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const accessSec = document.getElementById('sec-access');
+  let pingTimer = null, logTimer = null;
+
+  const kstDate = ts => new Date(ts).toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit'});
+  const kstTime = ts => new Date(ts).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
+
+  function ping(){ fetch('/api/ping',{method:'POST'}).catch(()=>{}); }
+
+  function unlock(user, role){
+    body.classList.remove('auth-lock');
+    overlay.setAttribute('hidden','');
+    chip.querySelector('.who').innerHTML = `<b>${esc(user)}</b>${role==='master'?' · 마스터':''}`;
+    chip.removeAttribute('hidden');
+    window.dispatchEvent(new Event('resize'));      // 차트 크기 재계산
+    ping();
+    pingTimer = setInterval(ping, 5*60*1000);        // 사용 중 5분마다 핑
+    if (role === 'master'){
+      accessSec.removeAttribute('hidden');
+      loadLogs();
+      logTimer = setInterval(loadLogs, 60*1000);     // 로그 1분마다 자동 갱신
+    }
+  }
+
+  // 세션 복원 — 이미 로그인돼 있으면 바로 통과
+  fetch('/api/me').then(r=> r.ok ? r.json() : null).then(d=>{
+    if (d && d.ok) unlock(d.user, d.role);
+    else userInput.focus();
+  }).catch(()=> userInput.focus());
+
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    errBox.textContent=''; btn.disabled=true; btn.textContent='확인 중…';
+    try{
+      const res = await fetch('/api/login',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ username:userInput.value, password:passInput.value })
+      });
+      const d = await res.json().catch(()=>({}));
+      if (res.ok && d.ok){ unlock(d.user, d.role); }
+      else { errBox.textContent = d.error || '로그인에 실패했습니다.'; passInput.value=''; passInput.focus(); }
+    }catch(err){ errBox.textContent='서버 오류 — 잠시 후 다시 시도하세요.'; }
+    finally{ btn.disabled=false; btn.textContent='로그인'; }
+  });
+
+  logoutBtn.addEventListener('click', async ()=>{
+    if (pingTimer) clearInterval(pingTimer);
+    if (logTimer) clearInterval(logTimer);
+    try{ await fetch('/api/logout',{method:'POST'}); }catch(e){}
+    location.reload();
+  });
+
+  async function loadLogs(){
+    const cards = document.getElementById('accessCards');
+    const tbody = document.getElementById('accessLog');
+    const foot  = document.getElementById('accessFoot');
+    let d;
+    try{
+      const r = await fetch('/api/logs');
+      d = await r.json();
+      if (!r.ok || !d.ok){ foot.textContent='로그를 불러올 수 없습니다.'; return; }
+    }catch(e){ foot.textContent='로그 요청 실패.'; return; }
+
+    if (d.kvReady === false){
+      cards.innerHTML = `<div class="empty" style="grid-column:1/-1;"><div class="tag">KV not connected</div>
+        <b>로그 저장소(KV) 미연동</b><br>Vercel KV 연결 후 접속 로그가 집계됩니다.</div>`;
+      tbody.innerHTML = `<tr><td class="l" colspan="4" style="text-align:center;color:var(--ink-300);padding:24px;">데이터 없음</td></tr>`;
+      foot.textContent=''; return;
+    }
+    const users = d.users || [];
+    cards.innerHTML = users.length ? users.map(u=>`
+      <div class="card">
+        <div class="label">${esc(u.user)}${u.role==='master'?' · 마스터':''}</div>
+        <div class="value">${fmt(u.total)}</div>
+        <div class="delta" style="color:var(--ink-500);font-weight:400;">로그인 ${fmt(u.logins)} · 사용 ${fmt(u.pings)}<br>최근 ${kstDate(u.last)} ${kstTime(u.last)}</div>
+      </div>`).join('') : `<div class="empty" style="grid-column:1/-1;"><b>아직 접속 기록이 없습니다.</b></div>`;
+
+    const evs = d.events || [];
+    tbody.innerHTML = evs.length ? evs.map(ev=>`
+      <tr>
+        <td class="l">${esc(ev.u)}</td>
+        <td><span class="ttag ${ev.type==='login'?'login':'ping'}">${ev.type==='login'?'로그인':'사용'}</span></td>
+        <td>${kstDate(ev.ts)}</td>
+        <td>${kstTime(ev.ts)}</td>
+      </tr>`).join('') : `<tr><td class="l" colspan="4" style="text-align:center;color:var(--ink-300);padding:24px;">기록 없음</td></tr>`;
+    foot.textContent = `총 ${fmt(d.total||evs.length)}건 기록 · 표시 ${evs.length}건 · 60초마다 자동 갱신`;
+  }
+  document.getElementById('logRefresh').addEventListener('click', loadLogs);
 })();
 
 

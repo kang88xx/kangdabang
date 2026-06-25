@@ -50,6 +50,9 @@ echo $$ > "$LOCK"; trap 'rm -f "$LOCK"' EXIT
     echo "!!! 오늘 데이터 없음($TODAY_CSV) — 배포 중단"; notify "수집 데이터 없음 — 대시보드 미갱신"; exit 1
   fi
 
+  # 2.5) 코박 '캉다방' 활동 수집 — 보조 데이터라 실패해도 배포는 계속(cobak.py가 항상 exit 0).
+  "$PY" cobak.py || echo "(코박 수집 건너뜀 — 기존 데이터 유지)"
+
   # 3) 빌드 — 실패 시 배포 중단
   if ! "$PY" build_dashboard.py; then
     echo "!!! build_dashboard.py 실패 — 배포 중단"; notify "대시보드 생성 실패"; exit 1

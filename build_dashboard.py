@@ -148,6 +148,48 @@ TEMPLATE = r"""<!DOCTYPE html>
     box-shadow:0 8px 28px rgba(0,0,0,.28); max-width:340px; white-space:pre-line; }
   .refresh-toast.err { border-left-color:#E5484D; }
 
+  /* ── 로그인 게이트 ───────────────────────────────────────── */
+  /* 잠금 중엔 스크롤만 막고, 본문은 레이아웃을 유지(차트가 0px로 그려지는 문제 방지)한 채
+     불투명 오버레이로 가린다. 로그인 성공 시 오버레이만 제거하면 차트가 정상 크기로 보인다. */
+  body.auth-lock { overflow:hidden; }
+  #authOverlay { position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(120% 120% at 50% 0%, #0B3A2C 0%, #061B14 70%); padding:24px; }
+  #authOverlay[hidden] { display:none; }
+  .auth-card { width:100%; max-width:360px; background:var(--white); border:1px solid var(--line);
+    padding:34px 30px 28px; box-shadow:0 24px 60px rgba(0,0,0,.4); }
+  .auth-card .brand { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--signal); margin-bottom:6px; }
+  .auth-card h1 { margin:0 0 4px; font-size:22px; font-weight:600; letter-spacing:-.02em; }
+  .auth-card .sub { font-size:12.5px; color:var(--ink-500); margin-bottom:22px; }
+  .auth-card label { display:block; font-family:'Geist Mono',monospace; font-size:10.5px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-500); margin:0 0 6px; }
+  .auth-card input { width:100%; padding:11px 12px; font-size:14px; font-family:inherit;
+    border:1px solid var(--line); background:var(--paper); color:var(--ink-900); margin-bottom:16px; }
+  .auth-card input:focus { outline:none; border-color:var(--forest-500); background:#fff; }
+  .auth-card button { width:100%; padding:12px; font-family:'Geist Mono',monospace; font-size:12px;
+    letter-spacing:.12em; text-transform:uppercase; color:#fff; background:var(--forest-900);
+    border:none; cursor:pointer; transition:background .15s; }
+  .auth-card button:hover { background:var(--forest-700); }
+  .auth-card button:disabled { opacity:.55; cursor:progress; }
+  .auth-err { color:var(--negative); font-size:12.5px; min-height:18px; margin-bottom:6px; }
+
+  /* 상단 계정 칩 + 로그아웃 */
+  #userChip { display:flex; gap:9px; align-items:center; }
+  #userChip .who { color:#fff; text-transform:none; letter-spacing:.02em; }
+  #userChip .who b { color:var(--signal); }
+  .logout-btn { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.12em;
+    text-transform:uppercase; color:rgba(255,255,255,.82); background:transparent;
+    border:1px solid rgba(255,255,255,.3); padding:4px 9px; cursor:pointer; transition:all .15s; }
+  .logout-btn:hover { color:#fff; border-color:var(--signal); }
+
+  /* ── 07b 접속 로그 (마스터 전용) ─────────────────────────── */
+  .access-foot { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.04em;
+    color:var(--ink-500); margin-top:10px; }
+  .ttag { display:inline-block; font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.08em;
+    text-transform:uppercase; padding:2px 7px; color:#fff; }
+  .ttag.login { background:var(--forest-500); }
+  .ttag.ping { background:var(--info); }
+
   /* (헤더 cover 제거됨 — 상단 정보는 .rail 로 통합) */
 
   main { max-width:1180px; margin:0 auto; padding:40px 64px 0; }
@@ -174,6 +216,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     color:#fff; margin-left:auto; align-self:center; }
   .dtag.ch { background:var(--forest-500); border-color:var(--forest-500); }
   .dtag.gr { background:var(--info); border-color:var(--info); }
+  .dtag.cobak { background:#1652f0; border-color:#1652f0; color:#fff; text-decoration:none; }
 
   /* KPI CARDS */
   .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
@@ -310,13 +353,27 @@ TEMPLATE = r"""<!DOCTYPE html>
     .modal-body th, .modal-body td { padding:9px 10px; } }
 </style>
 </head>
-<body>
+<body class="auth-lock">
+
+  <div id="authOverlay">
+    <form class="auth-card" id="authForm" autocomplete="off">
+      <div class="brand">Kangtearoom · Internal</div>
+      <h1>캉다방 통계</h1>
+      <div class="sub">내부 전용 — 계정으로 로그인하세요.</div>
+      <label for="authUser">아이디</label>
+      <input id="authUser" name="username" type="text" autocomplete="username" autofocus>
+      <label for="authPass">비밀번호</label>
+      <input id="authPass" name="password" type="password" autocomplete="current-password">
+      <div class="auth-err" id="authErr"></div>
+      <button type="submit" id="authBtn">로그인</button>
+    </form>
+  </div>
 
   <div class="rail">
     <div class="rail-in">
       <span>KANGTEAROOM DATA</span>
       <span class="mid"><a class="chlink" href="https://t.me/__CHUSER__" target="_blank" rel="noopener">@__CHUSER__</a> · <a class="chlink" href="https://t.me/__GRUSER__" target="_blank" rel="noopener">@__GRUSER__</a></span>
-      <span class="end"><span id="lastUpdated">최종 업데이트 __GENERATED__ KST</span><button id="refreshBtn" class="refresh-btn" hidden>지금 갱신</button></span>
+      <span class="end"><span id="lastUpdated">최종 업데이트 __GENERATED__ KST</span><button id="refreshBtn" class="refresh-btn" hidden>지금 갱신</button><span id="userChip" hidden><span class="who"></span><button type="button" id="logoutBtn" class="logout-btn">로그아웃</button></span></span>
     </div>
   </div>
   <div id="refreshToast" class="refresh-toast" role="status" aria-live="polite" hidden></div>
@@ -417,7 +474,37 @@ TEMPLATE = r"""<!DOCTYPE html>
       </div>
     </section>
 
+    <!-- 07 코박 활동 -->
+    <section id="sec-cobak">
+      <div class="sec-head">
+        <div><div class="eyebrow">Community · Cobak</div><h2>코박 활동 — 캉다방</h2></div>
+        <a class="dtag cobak" id="cobakTag" href="https://cobak.co/" target="_blank" rel="noopener">cobak.co</a>
+      </div>
+      <div class="cards" id="cobakCards" style="margin-bottom:24px;"></div>
+      <div class="eyebrow" style="margin-bottom:12px;">게시글 목록 — 최신순 (제목 클릭 시 코박에서 열림)</div>
+      <div class="table-wrap">
+        <table><thead><tr>
+          <th class="l">게시물</th><th>날짜</th><th>시각</th><th>조회수</th><th>추천</th><th>댓글</th>
+        </tr></thead><tbody id="cobakPosts"></tbody></table>
+      </div>
+    </section>
 
+    <!-- 08 접속 로그 (마스터 전용) -->
+    <section id="sec-access" hidden>
+      <div class="sec-head">
+        <div><div class="eyebrow">Admin · Access</div><h2>접속 로그 — 사용 현황</h2></div>
+        <button type="button" id="logRefresh" class="dtag" style="background:var(--ink-900);border:none;cursor:pointer;">새로고침</button>
+      </div>
+      <div class="eyebrow" style="margin-bottom:12px;">계정별 사용량 — 접속 횟수 순</div>
+      <div class="cards" id="accessCards" style="margin-bottom:28px;"></div>
+      <div class="eyebrow" style="margin-bottom:12px;">상세 타임라인 — 누가 · 언제 (로그인/사용) · 최신순</div>
+      <div class="table-wrap">
+        <table><thead><tr>
+          <th class="l">계정</th><th>유형</th><th>날짜</th><th>시각</th>
+        </tr></thead><tbody id="accessLog"></tbody></table>
+      </div>
+      <div class="access-foot" id="accessFoot"></div>
+    </section>
 
   </main>
 
@@ -444,6 +531,7 @@ const POSTS    = __POSTS__;
 const OFFICIAL = __OFFICIAL__;
 const MEMBERS  = __MEMBERS__;
 
+const COBAK    = __COBAK__;      // { available, nickname, totals:{posts,views,recommend,comments}, posts:[{id,title,url,views,recommend,comments,date}] }
 const JOINLEAVE= __JOINLEAVE__;  // { available, events:[{date,kind,name,username,id}] }
 const JOINLEAVE_GR = __JOINLEAVE_GR__;  // 그룹 유입·이탈
 const CH_USER  = "__CHUSER__";
@@ -839,6 +927,142 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
   }
 })();
 
+// ---------- 07 코박 활동 (캉다방) ----------
+(function(){
+  const cardsBox = document.getElementById('cobakCards');
+  const body     = document.getElementById('cobakPosts');
+  if (!COBAK || !COBAK.available) {
+    cardsBox.innerHTML = `<div class="empty" style="grid-column:1/-1;"><div class="tag">No cobak data</div>
+      <b>코박 활동 데이터 없음</b><br>cobak.py 실행 후 표시됩니다.</div>`;
+    return;
+  }
+  const t = COBAK.totals || {};
+  const tag = document.getElementById('cobakTag');
+  if (tag && COBAK.source_url) tag.href = COBAK.source_url;
+
+  cardsBox.innerHTML = [
+    {label:'총 게시글', val:t.posts},
+    {label:'총 뷰',     val:t.views},
+    {label:'총 추천',   val:t.recommend},
+    {label:'총 댓글',   val:t.comments},
+  ].map(c=>`<div class="card"><div class="label">${c.label}</div><div class="value">${fmt(c.val||0)}</div></div>`).join('');
+
+  const posts = COBAK.posts || [];
+  if (posts.length) {
+    body.innerHTML = posts.map(p=>`
+      <tr>
+        <td class="l"><a class="post" href="${p.url}" target="_blank" rel="noopener">${esc(p.title)}</a></td>
+        <td>${(p.date||'').slice(5)}</td>
+        <td>${p.time||''}</td>
+        <td>${fmt(p.views)}</td>
+        <td>${fmt(p.recommend)}</td>
+        <td>${fmt(p.comments)}</td>
+      </tr>`).join('');
+  } else {
+    body.innerHTML = `<tr><td class="l" colspan="6" style="text-align:center;color:var(--ink-300);padding:24px;">게시글 없음</td></tr>`;
+  }
+})();
+
+// ---------- 인증 게이트 + 접속 로그(마스터) ----------
+(function(){
+  const body      = document.body;
+  const overlay   = document.getElementById('authOverlay');
+  const form      = document.getElementById('authForm');
+  const userInput = document.getElementById('authUser');
+  const passInput = document.getElementById('authPass');
+  const errBox    = document.getElementById('authErr');
+  const btn       = document.getElementById('authBtn');
+  const chip      = document.getElementById('userChip');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const accessSec = document.getElementById('sec-access');
+  let pingTimer = null, logTimer = null;
+
+  const kstDate = ts => new Date(ts).toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit'});
+  const kstTime = ts => new Date(ts).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
+
+  function ping(){ fetch('/api/ping',{method:'POST'}).catch(()=>{}); }
+
+  function unlock(user, role){
+    body.classList.remove('auth-lock');
+    overlay.setAttribute('hidden','');
+    chip.querySelector('.who').innerHTML = `<b>${esc(user)}</b>${role==='master'?' · 마스터':''}`;
+    chip.removeAttribute('hidden');
+    window.dispatchEvent(new Event('resize'));      // 차트 크기 재계산
+    ping();
+    pingTimer = setInterval(ping, 5*60*1000);        // 사용 중 5분마다 핑
+    if (role === 'master'){
+      accessSec.removeAttribute('hidden');
+      loadLogs();
+      logTimer = setInterval(loadLogs, 60*1000);     // 로그 1분마다 자동 갱신
+    }
+  }
+
+  // 세션 복원 — 이미 로그인돼 있으면 바로 통과
+  fetch('/api/me').then(r=> r.ok ? r.json() : null).then(d=>{
+    if (d && d.ok) unlock(d.user, d.role);
+    else userInput.focus();
+  }).catch(()=> userInput.focus());
+
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    errBox.textContent=''; btn.disabled=true; btn.textContent='확인 중…';
+    try{
+      const res = await fetch('/api/login',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ username:userInput.value, password:passInput.value })
+      });
+      const d = await res.json().catch(()=>({}));
+      if (res.ok && d.ok){ unlock(d.user, d.role); }
+      else { errBox.textContent = d.error || '로그인에 실패했습니다.'; passInput.value=''; passInput.focus(); }
+    }catch(err){ errBox.textContent='서버 오류 — 잠시 후 다시 시도하세요.'; }
+    finally{ btn.disabled=false; btn.textContent='로그인'; }
+  });
+
+  logoutBtn.addEventListener('click', async ()=>{
+    if (pingTimer) clearInterval(pingTimer);
+    if (logTimer) clearInterval(logTimer);
+    try{ await fetch('/api/logout',{method:'POST'}); }catch(e){}
+    location.reload();
+  });
+
+  async function loadLogs(){
+    const cards = document.getElementById('accessCards');
+    const tbody = document.getElementById('accessLog');
+    const foot  = document.getElementById('accessFoot');
+    let d;
+    try{
+      const r = await fetch('/api/logs');
+      d = await r.json();
+      if (!r.ok || !d.ok){ foot.textContent='로그를 불러올 수 없습니다.'; return; }
+    }catch(e){ foot.textContent='로그 요청 실패.'; return; }
+
+    if (d.kvReady === false){
+      cards.innerHTML = `<div class="empty" style="grid-column:1/-1;"><div class="tag">KV not connected</div>
+        <b>로그 저장소(KV) 미연동</b><br>Vercel KV 연결 후 접속 로그가 집계됩니다.</div>`;
+      tbody.innerHTML = `<tr><td class="l" colspan="4" style="text-align:center;color:var(--ink-300);padding:24px;">데이터 없음</td></tr>`;
+      foot.textContent=''; return;
+    }
+    const users = d.users || [];
+    cards.innerHTML = users.length ? users.map(u=>`
+      <div class="card">
+        <div class="label">${esc(u.user)}${u.role==='master'?' · 마스터':''}</div>
+        <div class="value">${fmt(u.total)}</div>
+        <div class="delta" style="color:var(--ink-500);font-weight:400;">로그인 ${fmt(u.logins)} · 사용 ${fmt(u.pings)}<br>최근 ${kstDate(u.last)} ${kstTime(u.last)}</div>
+      </div>`).join('') : `<div class="empty" style="grid-column:1/-1;"><b>아직 접속 기록이 없습니다.</b></div>`;
+
+    const evs = d.events || [];
+    tbody.innerHTML = evs.length ? evs.map(ev=>`
+      <tr>
+        <td class="l">${esc(ev.u)}</td>
+        <td><span class="ttag ${ev.type==='login'?'login':'ping'}">${ev.type==='login'?'로그인':'사용'}</span></td>
+        <td>${kstDate(ev.ts)}</td>
+        <td>${kstTime(ev.ts)}</td>
+      </tr>`).join('') : `<tr><td class="l" colspan="4" style="text-align:center;color:var(--ink-300);padding:24px;">기록 없음</td></tr>`;
+    foot.textContent = `총 ${fmt(d.total||evs.length)}건 기록 · 표시 ${evs.length}건 · 60초마다 자동 갱신`;
+  }
+  document.getElementById('logRefresh').addEventListener('click', loadLogs);
+})();
+
 
 </script>
 
@@ -901,6 +1125,7 @@ def main():
 
     joinleave = load_json("join_leave.json", {"available": False})
     joinleave_gr = load_json("join_leave_group.json", {"available": False})
+    cobak = load_json("cobak_stats.json", {"available": False})
 
 
 
@@ -917,7 +1142,8 @@ def main():
             .replace("__OFFICIAL__", json.dumps(official, ensure_ascii=False))
             .replace("__MEMBERS__", json.dumps(members, ensure_ascii=False))
             .replace("__JOINLEAVE__", json.dumps(joinleave, ensure_ascii=False))
-            .replace("__JOINLEAVE_GR__", json.dumps(joinleave_gr, ensure_ascii=False)))
+            .replace("__JOINLEAVE_GR__", json.dumps(joinleave_gr, ensure_ascii=False))
+            .replace("__COBAK__", json.dumps(cobak, ensure_ascii=False)))
 
     OUT.write_text(html, encoding="utf-8")
     print(f"대시보드 생성 완료 → {OUT}")
