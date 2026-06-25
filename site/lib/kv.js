@@ -1,8 +1,10 @@
 // Upstash Redis(=Vercel KV) REST API 래퍼 — 의존성 없음(Node 18+ 전역 fetch 사용).
 // Vercel KV 연동 시 자동 주입되는 환경변수 KV_REST_API_URL / KV_REST_API_TOKEN 사용.
 // 환경변수가 없으면 kvReady=false 로 동작하며, 로깅은 조용히 건너뛴다(사이트는 정상 작동).
-const URL = process.env.KV_REST_API_URL;
-const TOKEN = process.env.KV_REST_API_TOKEN;
+// 연동 방식(Vercel KV / Upstash Marketplace)에 따라 주입되는 env 이름이 달라
+// 두 관례를 모두 인식한다: KV_REST_API_* (Vercel KV) / UPSTASH_REDIS_REST_* (Upstash).
+const URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const kvReady = !!(URL && TOKEN);
 const LOG_KEY = "cb:accesslog";
 const MAX_LOG = 9999; // 최근 1만 건 보관(누적, LTRIM)
