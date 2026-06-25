@@ -190,6 +190,21 @@ TEMPLATE = r"""<!DOCTYPE html>
   .ttag.login { background:var(--forest-500); }
   .ttag.ping { background:var(--info); }
 
+  /* ── 09 내 계정 (일반 계정 전용) ─────────────────────────── */
+  .prof-wrap { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; }
+  .prof-card { background:var(--white); border:1px solid var(--line); padding:22px; }
+  .prof-card input { width:100%; padding:11px 12px; font-size:14px; font-family:inherit;
+    border:1px solid var(--line); background:var(--paper); color:var(--ink-900); margin-bottom:12px; }
+  .prof-card input:focus { outline:none; border-color:var(--forest-500); background:#fff; }
+  .prof-card input:disabled { color:var(--ink-300); background:var(--line-soft); cursor:not-allowed; }
+  .prof-btn { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    color:#fff; background:var(--forest-900); border:none; padding:9px 16px; cursor:pointer; transition:background .15s; }
+  .prof-btn:hover { background:var(--forest-700); }
+  .prof-btn:disabled { opacity:.5; cursor:not-allowed; }
+  .prof-msg { font-size:12.5px; margin-top:10px; min-height:16px; }
+  .prof-msg.ok { color:var(--positive); }
+  .prof-msg.err { color:var(--negative); }
+
   /* (헤더 cover 제거됨 — 상단 정보는 .rail 로 통합) */
 
   main { max-width:1180px; margin:0 auto; padding:40px 64px 0; }
@@ -505,6 +520,27 @@ TEMPLATE = r"""<!DOCTYPE html>
       </div>
       <div class="pager" id="accessPager"></div>
       <div class="access-foot" id="accessFoot"></div>
+    </section>
+
+    <!-- 09 내 계정 (일반 계정 전용) -->
+    <section id="sec-profile" hidden>
+      <div class="sec-head">
+        <div><div class="eyebrow">My · Account</div><h2>내 계정 — 이름·비밀번호 변경</h2></div>
+      </div>
+      <div class="prof-wrap">
+        <div class="prof-card">
+          <div class="eyebrow" style="margin-bottom:10px;">계정 이름 <span id="profNameHint" style="color:var(--ink-300);text-transform:none;letter-spacing:0;">(1회만 변경 가능)</span></div>
+          <input id="profName" type="text" maxlength="20" autocomplete="off">
+          <button type="button" id="profNameBtn" class="prof-btn">이름 변경</button>
+          <div id="profNameMsg" class="prof-msg"></div>
+        </div>
+        <div class="prof-card">
+          <div class="eyebrow" style="margin-bottom:10px;">비밀번호 <span style="color:var(--ink-300);text-transform:none;letter-spacing:0;">(자유롭게 변경)</span></div>
+          <input id="profPass" type="password" maxlength="72" autocomplete="new-password" placeholder="새 비밀번호">
+          <button type="button" id="profPassBtn" class="prof-btn">비밀번호 변경</button>
+          <div id="profPassMsg" class="prof-msg"></div>
+        </div>
+      </div>
     </section>
 
   </main>
@@ -976,6 +1012,7 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
   const chip      = document.getElementById('userChip');
   const logoutBtn = document.getElementById('logoutBtn');
   const accessSec = document.getElementById('sec-access');
+  const profileSec = document.getElementById('sec-profile');
   let pingTimer = null, logTimer = null;
 
   const kstDate = ts => new Date(ts).toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit'});
@@ -983,24 +1020,78 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
 
   function ping(){ fetch('/api/ping',{method:'POST'}).catch(()=>{}); }
 
-  function unlock(user, role){
+  function setChip(name, role){
+    chip.querySelector('.who').innerHTML = `<b>${esc(name)}</b>${role==='master'?' · 마스터':''}`;
+  }
+
+  function unlock(name, role, nameChanged){
     body.classList.remove('auth-lock');
     overlay.setAttribute('hidden','');
-    chip.querySelector('.who').innerHTML = `<b>${esc(user)}</b>${role==='master'?' · 마스터':''}`;
+    setChip(name, role);
     chip.removeAttribute('hidden');
     window.dispatchEvent(new Event('resize'));      // 차트 크기 재계산
     ping();
     pingTimer = setInterval(ping, 5*60*1000);        // 사용 중 5분마다 핑
     if (role === 'master'){
+      profileSec.setAttribute('hidden','');
       accessSec.removeAttribute('hidden');
       loadLogs();
       logTimer = setInterval(loadLogs, 60*1000);     // 로그 1분마다 자동 갱신
+    } else {
+      accessSec.setAttribute('hidden','');
+      profileSec.removeAttribute('hidden');
+      initProfile(name, role, !!nameChanged);
     }
+  }
+
+  // ----- 내 계정(일반 계정): 이름 1회 변경 + 비밀번호 자유 변경 -----
+  function initProfile(name, role, nameChanged){
+    const nameIn = document.getElementById('profName');
+    const nameBtn = document.getElementById('profNameBtn');
+    const nameHint = document.getElementById('profNameHint');
+    const nameMsg = document.getElementById('profNameMsg');
+    const passIn = document.getElementById('profPass');
+    const passBtn = document.getElementById('profPassBtn');
+    const passMsg = document.getElementById('profPassMsg');
+    nameIn.value = name;
+    if (nameChanged){
+      nameIn.disabled = true; nameBtn.disabled = true;
+      nameHint.textContent = '(이미 변경됨 — 더 이상 못 바꿈)';
+    }
+    nameBtn.onclick = async ()=>{
+      const nm = (nameIn.value||'').trim();
+      nameMsg.className='prof-msg'; nameMsg.textContent='';
+      if (!nm || nm===name){ nameMsg.className='prof-msg err'; nameMsg.textContent='새 이름을 입력하세요.'; return; }
+      if (!confirm(`계정 이름을 "${nm}" 으로 변경할까요?\n이름은 한 번만 바꿀 수 있고, 다음 로그인부터 새 이름을 사용합니다.`)) return;
+      nameBtn.disabled=true;
+      try{
+        const r = await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({newName:nm})});
+        const d = await r.json().catch(()=>({}));
+        if (r.ok && d.ok && d.changedName){
+          nameMsg.className='prof-msg ok'; nameMsg.textContent='이름이 변경됐어요. 다음 로그인부터 새 이름을 사용하세요.';
+          nameIn.value=d.name; nameIn.disabled=true; nameBtn.disabled=true; nameHint.textContent='(이미 변경됨 — 더 이상 못 바꿈)';
+          setChip(d.name, role);
+        } else { nameMsg.className='prof-msg err'; nameMsg.textContent=d.error||'변경에 실패했습니다.'; nameBtn.disabled=false; }
+      }catch(e){ nameMsg.className='prof-msg err'; nameMsg.textContent='서버 오류 — 잠시 후 다시 시도하세요.'; nameBtn.disabled=false; }
+    };
+    passBtn.onclick = async ()=>{
+      const pw = passIn.value||'';
+      passMsg.className='prof-msg'; passMsg.textContent='';
+      if (!pw){ passMsg.className='prof-msg err'; passMsg.textContent='새 비밀번호를 입력하세요.'; return; }
+      passBtn.disabled=true;
+      try{
+        const r = await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({newPassword:pw})});
+        const d = await r.json().catch(()=>({}));
+        if (r.ok && d.ok && d.changedPassword){ passMsg.className='prof-msg ok'; passMsg.textContent='비밀번호가 변경됐어요. 다음 로그인부터 적용됩니다.'; passIn.value=''; }
+        else { passMsg.className='prof-msg err'; passMsg.textContent=d.error||'변경에 실패했습니다.'; }
+      }catch(e){ passMsg.className='prof-msg err'; passMsg.textContent='서버 오류 — 잠시 후 다시 시도하세요.'; }
+      finally{ passBtn.disabled=false; }
+    };
   }
 
   // 세션 복원 — 이미 로그인돼 있으면 바로 통과
   fetch('/api/me').then(r=> r.ok ? r.json() : null).then(d=>{
-    if (d && d.ok) unlock(d.user, d.role);
+    if (d && d.ok) unlock(d.name||d.user, d.role, d.nameChanged);
     else userInput.focus();
   }).catch(()=> userInput.focus());
 
@@ -1013,7 +1104,7 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
         body: JSON.stringify({ username:userInput.value, password:passInput.value })
       });
       const d = await res.json().catch(()=>({}));
-      if (res.ok && d.ok){ unlock(d.user, d.role); }
+      if (res.ok && d.ok){ unlock(d.name||d.user, d.role, d.nameChanged); }
       else { errBox.textContent = d.error || '로그인에 실패했습니다.'; passInput.value=''; passInput.focus(); }
     }catch(err){ errBox.textContent='서버 오류 — 잠시 후 다시 시도하세요.'; }
     finally{ btn.disabled=false; btn.textContent='로그인'; }

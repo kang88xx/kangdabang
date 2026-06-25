@@ -1,6 +1,8 @@
 // GET /api/logs → (마스터 전용) 전체 접속 로그를 계정별로 집계해 반환.
+// 로그는 슬롯(A/B/kang) 기준으로 쌓이지만, 표시는 현재 이름으로 매핑(이름 바꾸면 반영).
 const { authFromReq, ACCOUNTS } = require("../lib/auth");
 const { readEvents, kvReady } = require("../lib/kv");
+const { nameMap } = require("../lib/accounts");
 
 module.exports = async (req, res) => {
   const a = authFromReq(req);
@@ -19,17 +21,23 @@ module.exports = async (req, res) => {
     return res.status(200).json({ ok: true, kvReady: true, error: String(e), users: [], events: [] });
   }
 
+  // 슬롯 -> 현재 표시 이름 매핑(이름 변경 반영). 실패해도 슬롯명으로 폴백.
+  let map = {};
+  try { map = await nameMap(); } catch (e) { map = {}; }
+  const dn = (slot) => map[slot] || slot;
+
   // 계정별 집계: 총 횟수 / 로그인 수 / 사용(핑) 수 / 최초·최근 접속.
-  // 모든 등록 계정을 0건으로 먼저 깔아둔다 — 접속 기록 없는 계정도 탭/목록에 노출,
-  // 계정 추가(ACCOUNTS) 시 자동으로 새 항목이 생긴다.
+  // 슬롯 기준으로 집계하되 user 필드는 현재 이름. 모든 등록 계정을 0건으로 깔아둔다
+  // — 접속 기록 없는 계정도 탭/목록에 노출, 계정 추가 시 자동 항목 생성.
   const byUser = {};
-  for (const name of Object.keys(ACCOUNTS)) {
-    byUser[name] = { user: name, role: ACCOUNTS[name].role, total: 0, logins: 0, pings: 0, first: null, last: null };
+  for (const slot of Object.keys(ACCOUNTS)) {
+    byUser[slot] = { user: dn(slot), slot, role: ACCOUNTS[slot].role, total: 0, logins: 0, pings: 0, first: null, last: null };
   }
   for (const ev of events) {
     if (!ev || !ev.u) continue;
-    let u = byUser[ev.u];
-    if (!u) u = byUser[ev.u] = { user: ev.u, role: ev.r, total: 0, logins: 0, pings: 0, first: null, last: null };
+    const slot = ev.u; // 로그는 슬롯 기준
+    let u = byUser[slot];
+    if (!u) u = byUser[slot] = { user: dn(slot), slot, role: ev.r, total: 0, logins: 0, pings: 0, first: null, last: null };
     u.total++;
     if (ev.type === "login") u.logins++;
     else u.pings++;
@@ -38,8 +46,12 @@ module.exports = async (req, res) => {
   }
   const users = Object.values(byUser).sort((x, y) => y.total - x.total);
 
-  // 상세 타임라인(최신순, 최대 800건)
-  const timeline = events.slice().sort((x, y) => y.ts - x.ts).slice(0, 800);
+  // 상세 타임라인(최신순, 최대 800건) — u 를 현재 이름으로 치환.
+  const timeline = events
+    .slice()
+    .sort((x, y) => y.ts - x.ts)
+    .slice(0, 800)
+    .map((ev) => ({ u: dn(ev.u), r: ev.r, type: ev.type, ts: ev.ts }));
 
   return res.status(200).json({ ok: true, kvReady: true, total: events.length, users, events: timeline });
 };

@@ -41,4 +41,12 @@ async function readEvents() {
     .filter(Boolean);
 }
 
-module.exports = { kvReady, logEvent, readEvents };
+// 범용 GET/SET (계정 override 저장용)
+async function kvGet(key) {
+  return cmd(["GET", key]);
+}
+async function kvSet(key, val) {
+  return cmd(["SET", key, val]);
+}
+
+module.exports = { kvReady, logEvent, readEvents, kvGet, kvSet };
