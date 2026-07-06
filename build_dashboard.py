@@ -73,6 +73,7 @@ def load_latest_posts():
                 _d, _t = r["date"][:10], r["date"][11:16]
             posts.append({
                 "id": int(r["id"]),
+                "iso": r["date"],                    # 쿼터(남은횟수) 기준시각 비교용 — HTML엔 미포함
                 "date": _d,
                 "time": _t,
                 "views": views,
@@ -91,6 +92,59 @@ def load_json(name, default):
         except Exception:
             return default
     return default
+
+
+# ── 게시글 서비스 남은횟수(쿼터) ───────────────────────────────────────────
+# 게시글 1건당 1회씩 차감되는 외부 서비스의 잔여 횟수를 우리 측에서 교차 확인한다.
+# 기준시각(baseline) 이후 올라온 채널 게시글 수 = 사용량. 사용 내역은 data/quota.json에
+# 게시글 id별로 누적 저장하므로, 매 갱신 재계산해도 이중 차감이 없고 옛 글이
+# CSV 수집 창(POST_WINDOW)에서 밀려나도 사용량이 유지된다.
+# 잔여 횟수를 수동 보정(충전 등)하려면 data/quota.json의 "total" 값을 고치면 된다.
+QUOTA_FILE = DATA_DIR / "quota.json"
+QUOTA_TOTAL = 420                                   # 최초 생성 시 기본값 (이후엔 파일 값 우선)
+QUOTA_BASELINE = "2026-07-06T13:10:00+09:00"        # 이 시각 기준 잔여 420회
+
+
+def update_quota(posts):
+    try:
+        q = json.loads(QUOTA_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        q = {}
+    q.setdefault("total", QUOTA_TOTAL)
+    q.setdefault("baseline", QUOTA_BASELINE)
+    counted = q.setdefault("counted", {})           # {post_id: "YYYY-MM-DD"}
+    try:
+        base_dt = datetime.fromisoformat(q["baseline"])
+    except Exception:
+        base_dt = datetime.fromisoformat(QUOTA_BASELINE)
+    for p in posts:
+        pid = str(p["id"])
+        if pid in counted:
+            continue
+        try:
+            dt = datetime.fromisoformat(p["iso"])
+        except Exception:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if dt > base_dt:
+            counted[pid] = p["date"]                # daily_summary와 동일한 UTC 일 버킷
+    try:
+        QUOTA_FILE.write_text(json.dumps(q, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception as e:
+        print(f"quota.json 저장 실패(집계는 계속): {e}", file=sys.stderr)
+    daily = {}
+    for d in counted.values():
+        daily[d] = daily.get(d, 0) + 1
+    used = len(counted)
+    return {
+        "available": True,
+        "total": q["total"],
+        "used": used,
+        "remaining": max(0, q["total"] - used),
+        "start": str(q["baseline"])[:10],
+        "daily": [{"date": d, "count": daily[d]} for d in sorted(daily)],
+    }
 
 
 TEMPLATE = r"""<!DOCTYPE html>
@@ -248,6 +302,11 @@ TEMPLATE = r"""<!DOCTYPE html>
   .datesel { font-family:'Geist Mono',monospace; font-size:12px; text-transform:none; letter-spacing:0;
     color:var(--ink-900); background:var(--white); border:1px solid var(--line); padding:5px 10px; cursor:pointer; }
   .datesel:hover { border-color:var(--forest-300); }
+  .quota-chip { margin-left:auto; font-family:'Geist Mono',monospace; font-size:12px; letter-spacing:.02em;
+    text-transform:none; color:var(--forest-700); background:var(--white); border:1px solid var(--line);
+    padding:5px 10px; cursor:pointer; transition:border-color .15s,color .15s; }
+  .quota-chip b { color:var(--signal); font-weight:600; }
+  .quota-chip:hover { border-color:var(--forest-300); color:var(--forest-500); }
 
   /* DETAIL BUTTON + MODAL */
   .card .detail-btn { margin-top:12px; font-family:'Geist Mono',monospace; font-size:10.5px;
@@ -357,6 +416,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     .eyebrow, .rail, .dtag { letter-spacing:.06em; }
     /* D1: 터치 타깃 ≥44px */
     .tab { padding:11px 16px; }
+    .quota-chip { padding:11px 12px; }
     .pager button { min-width:44px; padding:11px 12px; }
     .detail-btn { width:100%; padding:12px 10px; text-align:center; }
     .modal-close { width:44px; height:44px; display:flex; align-items:center;
@@ -450,6 +510,7 @@ TEMPLATE = r"""<!DOCTYPE html>
       <div class="eyebrow" style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <span>일별 게시물 — 날짜별 보기</span>
         <select id="postDate" class="datesel"></select>
+        <button type="button" id="quotaChip" class="quota-chip" title="클릭하면 일자별 사용 내역" hidden>남은횟수: <b>—</b></button>
       </div>
       <div class="table-wrap">
         <table><thead><tr>
@@ -571,6 +632,7 @@ const MEMBERS  = __MEMBERS__;
 const COBAK    = __COBAK__;      // { available, nickname, totals:{posts,views,recommend,comments}, posts:[{id,title,url,views,recommend,comments,date}] }
 const JOINLEAVE= __JOINLEAVE__;  // { available, events:[{date,kind,name,username,id}] }
 const JOINLEAVE_GR = __JOINLEAVE_GR__;  // 그룹 유입·이탈
+const QUOTA    = __QUOTA__;      // 게시글 서비스 남은횟수 { total, used, remaining, start, daily:[{date,count}] }
 const CH_USER  = "__CHUSER__";
 
 const fmt  = n => Number(n).toLocaleString('ko-KR');
@@ -823,6 +885,35 @@ if (POSTS.length) {
   document.getElementById('topPosts').innerHTML = empty;
   document.getElementById('allPosts').innerHTML = empty;
 }
+
+// ---------- 04b 게시글 서비스 남은횟수 (쿼터) ----------
+// 게시글 1건당 1회 차감되는 외부 서비스의 잔여 횟수를 자체 집계로 교차 확인.
+// 칩 클릭 → 일자별 사용 내역(몇일 · 몇건 · 그 시점 남은횟수) 레이어 팝업.
+(function(){
+  const chip = document.getElementById('quotaChip');
+  if (!chip || !QUOTA || !QUOTA.available) return;
+  chip.hidden = false;
+  chip.querySelector('b').textContent = fmt(QUOTA.remaining) + '회';
+  chip.addEventListener('click', ()=>{
+    document.getElementById('mmTitle').textContent = '게시글 서비스 — 남은횟수';
+    document.getElementById('mmSub').textContent =
+      `총 ${fmt(QUOTA.total)}회 · 사용 ${fmt(QUOTA.used)}건 · 남은 ${fmt(QUOTA.remaining)}회 · ${QUOTA.start} 기준 시작`;
+    document.getElementById('mmHead').innerHTML =
+      '<tr><th class="l">날짜</th><th>게시글</th><th>남은횟수</th></tr>';
+    let cum = 0;
+    const rows = QUOTA.daily.map(d => { cum += d.count; return {date:d.date, count:d.count, left:QUOTA.total - cum}; });
+    rows.reverse();                                    // 최신일 먼저
+    document.getElementById('mmBody').innerHTML = rows.length
+      ? rows.map(r=>`<tr><td class="l">${r.date}</td><td>${fmt(r.count)}건</td><td>${fmt(r.left)}회</td></tr>`).join('')
+        + `<tr><td class="l" style="font-weight:600;color:var(--ink-900);">합계</td>`
+        + `<td style="font-weight:600;">${fmt(QUOTA.used)}건</td>`
+        + `<td style="font-weight:600;color:var(--forest-700);">${fmt(QUOTA.remaining)}회 남음</td></tr>`
+      : `<tr><td class="l" colspan="3" style="text-align:center;color:var(--ink-300);padding:24px;">아직 사용 내역이 없습니다 — ${QUOTA.start} 이후 게시글이 올라오면 자동 집계됩니다.</td></tr>`;
+    const modal = document.getElementById('metricModal');
+    modal.classList.add('show'); modal.setAttribute('aria-hidden','false');
+    document.getElementById('mmClose').focus();        // 닫기는 기존 모달 핸들러(X·배경·ESC) 공용
+  });
+})();
 
 // ---------- 05 공식 통계 ----------
 (function(){
@@ -1234,6 +1325,8 @@ def main():
         sys.exit(1)   # 빈 빌드 차단 — update.sh 게이트가 비정상 종료를 감지
 
     posts = load_latest_posts()
+    quota = update_quota(posts)
+    posts_out = [{k: v for k, v in p.items() if k != "iso"} for p in posts]
     official = load_json("broadcast_stats.json", {"available": False})
     members = load_json("group_top_members.json", [])
 
@@ -1252,7 +1345,8 @@ def main():
             .replace("__CHUSER__", CH_USER)
             .replace("__GRUSER__", GR_USER)
             .replace("__DATA__", json.dumps(rows, ensure_ascii=False))
-            .replace("__POSTS__", json.dumps(posts, ensure_ascii=False))
+            .replace("__POSTS__", json.dumps(posts_out, ensure_ascii=False))
+            .replace("__QUOTA__", json.dumps(quota, ensure_ascii=False))
             .replace("__OFFICIAL__", json.dumps(official, ensure_ascii=False))
             .replace("__MEMBERS__", json.dumps(members, ensure_ascii=False))
             .replace("__JOINLEAVE__", json.dumps(joinleave, ensure_ascii=False))
