@@ -334,6 +334,39 @@ TEMPLATE = r"""<!DOCTYPE html>
   .chart-box .eyebrow { margin-bottom:16px; }
   canvas { max-height:236px; max-width:100%; }
 
+  /* CHART DETAIL POPUP — 차트 클릭 → 확대 팝업 */
+  .chart-box.clickable { cursor:pointer; position:relative; transition:border-color .15s, box-shadow .15s; }
+  .chart-box.clickable:hover, .chart-box.clickable:focus-visible { border-color:var(--forest-500);
+    box-shadow:0 4px 18px rgba(11,58,44,.10); outline:none; }
+  .chart-box.clickable::after { content:'상세보기 ↗'; position:absolute; top:22px; right:24px;
+    font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--forest-500); opacity:0; transition:opacity .15s; pointer-events:none; }
+  .chart-box.clickable:hover::after, .chart-box.clickable:focus-visible::after { opacity:1; }
+  .modal.modal-wide { max-width:920px; max-height:90vh; }
+  .cd-tools { display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:16px 22px 0; flex-wrap:wrap; }
+  .range-tabs { display:flex; border:1px solid var(--line); }
+  .range-tabs button { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.08em;
+    background:var(--white); border:none; border-right:1px solid var(--line);
+    padding:8px 16px; cursor:pointer; color:var(--ink-500); transition:background .12s,color .12s; }
+  .range-tabs button:last-child { border-right:none; }
+  .range-tabs button:hover:not(.on) { color:var(--forest-700); }
+  .range-tabs button.on { background:var(--forest-900); color:#fff; }
+  .cd-points { font-family:'Geist Mono',monospace; font-size:11px; color:var(--ink-300); }
+  .stat-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
+    background:var(--line-soft); border:1px solid var(--line-soft); margin:16px 22px 0; }
+  .stat-strip .cell { background:var(--paper); padding:13px 15px; min-width:0; }
+  .stat-strip .lb { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-500); margin-bottom:6px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
+  .stat-strip .vl { font-family:'Geist Mono',monospace; font-variant-numeric:tabular-nums;
+    font-size:16px; font-weight:600; color:var(--ink-900); }
+  .cd-tools, .stat-strip, .cd-chart { flex-shrink:0; }
+  .cd-chart { height:340px; padding:18px 22px 4px; }
+  .cd-chart canvas { max-height:320px; }
+  #chartModal .modal-body { flex:1 1 auto; min-height:120px;
+    margin:8px 22px 20px; border-top:1px solid var(--line-soft); }
+
   /* NOTE / 기준 설명 박스 */
   .note-box { background:var(--white); border:1px solid var(--line);
     border-left:3px solid var(--signal); padding:20px 22px; margin-bottom:24px; }
@@ -425,7 +458,13 @@ TEMPLATE = r"""<!DOCTYPE html>
     .modal-back { align-items:flex-end; padding:12px; }
     .modal { max-height:88vh; }
     .modal-body table { font-size:12px; }
-    .modal-body th, .modal-body td { padding:9px 10px; } }
+    .modal-body th, .modal-body td { padding:9px 10px; }
+    /* 차트 상세 팝업 모바일 */
+    .cd-tools { padding:14px 14px 0; }
+    .stat-strip { grid-template-columns:repeat(2,1fr); margin:14px 14px 0; }
+    .cd-chart { height:250px; padding:14px 14px 0; }
+    .cd-chart canvas { max-height:236px; }
+    #chartModal .modal-body { margin:8px 14px 16px; } }
 </style>
 </head>
 <body class="auth-lock">
@@ -615,6 +654,34 @@ TEMPLATE = r"""<!DOCTYPE html>
       <div class="modal-body">
         <table><thead id="mmHead"></thead>
         <tbody id="mmBody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 차트 상세 팝업 (차트 클릭 시) -->
+  <div id="chartModal" class="modal-back" aria-hidden="true">
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="cdTitle">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow" id="cdEyebrow" style="margin-bottom:4px;"></div>
+          <h3 id="cdTitle">차트 상세</h3>
+          <div class="sub" id="cdSub"></div>
+        </div>
+        <button class="modal-close" id="cdClose" aria-label="닫기">&times;</button>
+      </div>
+      <div class="cd-tools">
+        <div class="range-tabs" id="cdTabs">
+          <button type="button" data-r="7">7일</button>
+          <button type="button" data-r="30" class="on">30일</button>
+          <button type="button" data-r="0">전체</button>
+        </div>
+        <span class="cd-points" id="cdPoints"></span>
+      </div>
+      <div class="stat-strip" id="cdStats"></div>
+      <div class="cd-chart"><canvas id="cdCanvas"></canvas></div>
+      <div class="modal-body">
+        <table><thead id="cdHead"></thead>
+        <tbody id="cdBody"></tbody></table>
       </div>
     </div>
   </div>
@@ -843,6 +910,172 @@ new Chart(document.getElementById('grNet'),{type:'bar',
     backgroundColor:grNet.map(v=>v==null?'#E3E7DF':v>=0?'#1F8A5B':'#C8404E'),borderRadius:0}]},
   options:(()=>{const o=clone(baseOpts);o.scales.x.offset=true;return o;})()});
 line('grActivity',[L('메시지','gr_messages','#2E84AE'),L('활성 유저','gr_active_users','#0B3A2C')]);
+
+// ---------- 차트 상세 팝업 (차트 클릭 → 확대 + 기간 전환 + 요약 + 일자별 표) ----------
+(function(){
+  const CH_TAG = '@__CHUSER__', GR_TAG = '@__GRUSER__';
+  const INFO = {
+    subs:      {eyebrow:'Channel · Growth', title:'구독자 추이', tag:CH_TAG, kind:'line', cumulative:true,
+                series:[{label:'구독자', key:'ch_subscribers', color:'#0B3A2C', fill:true}]},
+    subsNet:   hasFlow
+      ? {eyebrow:'Channel · Growth', title:'들어옴 · 나감 (일별)', tag:CH_TAG, kind:'flow'}
+      : {eyebrow:'Channel · Growth', title:'구독자 순증 · 순감 (일별)', tag:CH_TAG, kind:'net', netKey:'ch_subscribers'},
+    views:     {eyebrow:'Channel · Reach', title:'일일 조회수', tag:CH_TAG, kind:'bar',
+                series:[{label:'조회수', key:'ch_views', color:'#25876A'}]},
+    engage:    {eyebrow:'Channel · Reach', title:'공유 · 댓글 (인게이지먼트)', tag:CH_TAG, kind:'line',
+                series:[{label:'공유', key:'ch_forwards', color:'#2E84AE'},
+                        {label:'댓글', key:'ch_replies', color:'#1F8A5B'}]},
+    grMembers: {eyebrow:'Group · Discussion', title:'그룹 멤버 추이', tag:GR_TAG, kind:'line', cumulative:true,
+                series:[{label:'멤버', key:'gr_members', color:'#2E84AE', fill:true}]},
+    grNet:     {eyebrow:'Group · Discussion', title:'멤버 일별 순증 · 순감', tag:GR_TAG, kind:'net', netKey:'gr_members'},
+    grActivity:{eyebrow:'Group · Discussion', title:'메시지 · 활성 유저', tag:GR_TAG, kind:'line',
+                series:[{label:'메시지', key:'gr_messages', color:'#2E84AE'},
+                        {label:'활성 유저', key:'gr_active_users', color:'#0B3A2C'}]},
+  };
+  const modal = document.getElementById('chartModal');
+  if (!modal || typeof Chart === 'undefined') return;
+  let curId = null, range = 30, inst = null, lastFocus = null;
+  const $id  = x => document.getElementById(x);
+  const nums = a => a.filter(v => v != null);
+  const cell = (lb, vl, cls) => `<div class="cell"><div class="lb">${lb}</div><div class="vl ${cls||''}">${vl}</div></div>`;
+  const sgn  = v => (v > 0 ? '+' : '') + fmt(v);
+  const dash = '<span class="flat">—</span>';
+  const netOf = key => DATA.map((r,i)=> (i===0||r[key]==null||DATA[i-1][key]==null)?null : r[key]-DATA[i-1][key]);
+  const slice = arr => range === 0 ? arr : arr.slice(-range);
+
+  function render(){
+    const info = INFO[curId];
+    const rows = slice(DATA), lbs = slice(dates), n = rows.length;
+    $id('cdEyebrow').textContent = info.eyebrow;
+    $id('cdTitle').textContent = info.title;
+    $id('cdSub').textContent = `${info.tag} · ${range===0?'전체 기간':'최근 '+n+'일'} · ${rows[0].date} ~ ${rows[n-1].date}`;
+    $id('cdPoints').textContent = `${n}일 기록 · 마지막 날은 집계 진행중`;
+    modal.querySelectorAll('#cdTabs button').forEach(b => b.classList.toggle('on', +b.dataset.r === range));
+
+    let datasets = [], type = 'line', stacked = false, stats = '', head = '', body = '';
+    if (info.kind === 'flow'){
+      const j = rows.map(r=>r.ch_joined), l = rows.map(r=>r.ch_left==null?null:-r.ch_left);
+      type = 'bar'; stacked = true;
+      datasets = [{label:'들어옴',data:j,backgroundColor:'#1F8A5B',borderRadius:0,stack:'flow'},
+                  {label:'나감',data:l,backgroundColor:'#C8404E',borderRadius:0,stack:'flow'}];
+      const tj = nums(j).reduce((a,b)=>a+b,0), tl = nums(rows.map(r=>r.ch_left)).reduce((a,b)=>a+b,0);
+      const net = tj - tl;
+      stats = cell('총 들어옴','+'+fmt(tj),'up') + cell('총 나감','-'+fmt(tl),'down')
+        + cell('순증감', sgn(net), net>=0?'up':'down') + cell('일평균 순증', n?(net/n).toFixed(1):'—','');
+      head = '<tr><th class="l">날짜</th><th>들어옴</th><th>나감</th><th>순증감</th></tr>';
+      for (let i=n-1;i>=0;i--){
+        const r=rows[i], jj=r.ch_joined, ll=r.ch_left;
+        const nt = (jj==null||ll==null)?null:jj-ll;
+        body += `<tr><td class="l">${r.date}</td>`
+          + `<td>${jj==null?dash:'<span class="up">+'+fmt(jj)+'</span>'}</td>`
+          + `<td>${ll==null?dash:'<span class="down">-'+fmt(ll)+'</span>'}</td>`
+          + `<td>${nt==null?dash:`<span class="${nt>=0?'up':'down'}">${sgn(nt)}</span>`}</td></tr>`;
+      }
+    } else if (info.kind === 'net'){
+      const net = slice(netOf(info.netKey));
+      type = 'bar';
+      datasets = [{label:'순증·순감',data:net,borderRadius:0,
+        backgroundColor:net.map(v=>v==null?'#E3E7DF':v>=0?'#1F8A5B':'#C8404E')}];
+      const xs = nums(net), sum = xs.reduce((a,b)=>a+b,0);
+      stats = cell('순증감 합계', xs.length?sgn(sum):'—', sum>=0?'up':'down')
+        + cell('일평균', xs.length?(sum/xs.length).toFixed(1):'—','')
+        + cell('최대 증가', xs.length?sgn(Math.max(...xs)):'—','up')
+        + cell('최대 감소', xs.length?sgn(Math.min(...xs)):'—','down');
+      head = '<tr><th class="l">날짜</th><th>순증·순감</th></tr>';
+      for (let i=n-1;i>=0;i--){
+        const v = net[i];
+        body += `<tr><td class="l">${rows[i].date}</td>`
+          + `<td>${v==null?dash:`<span class="${v>=0?'up':'down'}">${sgn(v)}</span>`}</td></tr>`;
+      }
+    } else {
+      type = info.kind === 'bar' ? 'bar' : 'line';
+      datasets = info.series.map(s => type === 'bar'
+        ? {label:s.label, data:rows.map(r=>r[s.key]), backgroundColor:s.color, borderRadius:0}
+        : {label:s.label, data:rows.map(r=>r[s.key]), borderColor:s.color,
+           backgroundColor:s.fill?s.color+'22':s.color, tension:.25, pointRadius:2,
+           pointBackgroundColor:s.color, borderWidth:2, fill:!!s.fill});
+      const xs = nums(rows.map(r=>r[info.series[0].key]));
+      if (info.cumulative){
+        const d = xs.length>=2 ? xs[xs.length-1]-xs[0] : null;
+        stats = cell('현재', xs.length?fmt(xs[xs.length-1]):'—','')
+          + cell('기간 증감', d==null?'—':sgn(d), d==null?'':d>=0?'up':'down')
+          + cell('최고', xs.length?fmt(Math.max(...xs)):'—','')
+          + cell('최저', xs.length?fmt(Math.min(...xs)):'—','');
+      } else if (info.series.length === 1){
+        const sum = xs.reduce((a,b)=>a+b,0);
+        stats = cell('합계', xs.length?fmt(sum):'—','')
+          + cell('일평균', xs.length?fmt(Math.round(sum/xs.length)):'—','')
+          + cell('최고', xs.length?fmt(Math.max(...xs)):'—','')
+          + cell('최저', xs.length?fmt(Math.min(...xs)):'—','');
+      } else {
+        stats = info.series.map(s => {
+          const v = nums(rows.map(r=>r[s.key])), sum = v.reduce((a,b)=>a+b,0);
+          return cell(s.label+' 합계', v.length?fmt(sum):'—','')
+               + cell(s.label+' 일평균', v.length?fmt(Math.round(sum/v.length)):'—','');
+        }).join('');
+      }
+      if (info.series.length === 1){
+        head = `<tr><th class="l">날짜</th><th>${info.series[0].label}</th><th>전일대비</th></tr>`;
+        const allV = DATA.map(r=>r[info.series[0].key]);
+        const off = range === 0 ? 0 : Math.max(0, DATA.length - range);
+        for (let i=n-1;i>=0;i--){
+          const gi = off+i, v = allV[gi], pv = gi>0?allV[gi-1]:null;
+          const d = (v==null||pv==null)?null:v-pv;
+          const dc = d==null?dash:`<span class="${d>0?'up':d<0?'down':'flat'}">${d>0?'▲':d<0?'▼':'—'} ${fmt(Math.abs(d))}</span>`;
+          body += `<tr><td class="l">${rows[i].date}</td><td>${v==null?dash:fmt(v)}</td><td>${dc}</td></tr>`;
+        }
+      } else {
+        head = `<tr><th class="l">날짜</th>${info.series.map(s=>`<th>${s.label}</th>`).join('')}</tr>`;
+        for (let i=n-1;i>=0;i--){
+          body += `<tr><td class="l">${rows[i].date}</td>`
+            + info.series.map(s=>{const v=rows[i][s.key];return `<td>${v==null?dash:fmt(v)}</td>`;}).join('')
+            + '</tr>';
+        }
+      }
+    }
+    $id('cdStats').innerHTML = stats;
+    $id('cdHead').innerHTML = head;
+    $id('cdBody').innerHTML = body;
+
+    if (inst) inst.destroy();
+    const o = clone(baseOpts);
+    if (type === 'bar') o.scales.x.offset = true;
+    if (stacked){ o.scales.x.stacked = true; o.scales.y.stacked = true; }
+    inst = new Chart($id('cdCanvas'), {type, data:{labels:lbs, datasets}, options:o});
+  }
+
+  function open(id){
+    lastFocus = document.activeElement;
+    curId = id; range = 30;
+    render();
+    modal.classList.add('show'); modal.setAttribute('aria-hidden','false');
+    $id('cdClose').focus();
+  }
+  function close(){
+    modal.classList.remove('show'); modal.setAttribute('aria-hidden','true');
+    if (inst){ inst.destroy(); inst = null; }
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  Object.keys(INFO).forEach(id => {
+    const cv = document.getElementById(id);
+    if (!cv) return;
+    const box = cv.closest('.chart-box');
+    if (!box) return;
+    box.classList.add('clickable');
+    box.tabIndex = 0;
+    box.setAttribute('role','button');
+    box.setAttribute('aria-label', INFO[id].title + ' 상세보기');
+    box.addEventListener('click', () => open(id));
+    box.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' '){ e.preventDefault(); open(id); } });
+  });
+  $id('cdClose').addEventListener('click', close);
+  modal.addEventListener('click', e => { if (e.target === modal) close(); });
+  document.addEventListener('keydown', e => { if (e.key==='Escape' && modal.classList.contains('show')) close(); });
+  $id('cdTabs').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    range = +b.dataset.r; render();
+  });
+})();
 
 // ---------- 04 포스트 표 (하이퍼링크) ----------
 const link = id => `https://t.me/${CH_USER}/${id}`;
