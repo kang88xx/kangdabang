@@ -101,14 +101,18 @@ def load_json(name, default):
 # CSV 수집 창(POST_WINDOW)에서 밀려나도 사용량이 유지된다.
 # 잔여 횟수를 수동 보정(충전 등)하려면 data/quota.json의 "total" 값을 고치면 된다.
 QUOTA_FILE = DATA_DIR / "quota.json"
-QUOTA_TOTAL = 420                                   # 최초 생성 시 기본값 (이후엔 파일 값 우선)
-QUOTA_BASELINE = "2026-07-06T13:10:00+09:00"        # 이 시각 기준 잔여 420회
+QUOTA_TOTAL = 105                                   # 최초 생성 시 기본값 (이후엔 파일 값 우선)
+QUOTA_BASELINE = "2026-08-10T13:49:00+09:00"        # 이 시각 기준 잔여 105회 (2026-08-10 잔여 변동 반영)
 
 
 def update_quota(posts):
     try:
         q = json.loads(QUOTA_FILE.read_text(encoding="utf-8"))
     except Exception:
+        q = {}
+    # 기준시각이 코드와 다르면(충전·잔여 보정으로 QUOTA_BASELINE을 갱신한 경우)
+    # 기존 카운터를 버리고 새 기준으로 리셋한다 — 파일 값이 코드보다 우선이라 이 마이그레이션이 필요.
+    if q.get("baseline") != QUOTA_BASELINE:
         q = {}
     q.setdefault("total", QUOTA_TOTAL)
     q.setdefault("baseline", QUOTA_BASELINE)
