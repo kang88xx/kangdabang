@@ -371,6 +371,17 @@ TEMPLATE = r"""<!DOCTYPE html>
   #chartModal .modal-body { flex:1 1 auto; min-height:120px;
     margin:8px 22px 20px; border-top:1px solid var(--line-soft); }
 
+  /* 차트 상세 팝업 — 전체화면 모드 */
+  .modal-fs { background:none; border:1px solid var(--line); cursor:pointer; color:var(--ink-500);
+    font-size:15px; line-height:1; width:30px; height:30px; display:flex; align-items:center;
+    justify-content:center; transition:color .15s, border-color .15s; }
+  .modal-fs:hover { color:var(--ink-900); border-color:var(--ink-900); }
+  #chartModal.fs { padding:0; align-items:stretch; }
+  #chartModal.fs .modal-wide { max-width:none; width:100%; max-height:none; height:100%;
+    border:none; box-shadow:none; }
+  #chartModal.fs .cd-chart { height:48vh; }
+  #chartModal.fs .cd-chart canvas { max-height:none; }
+
   /* NOTE / 기준 설명 박스 */
   .note-box { background:var(--white); border:1px solid var(--line);
     border-left:3px solid var(--signal); padding:20px 22px; margin-bottom:24px; }
@@ -458,6 +469,8 @@ TEMPLATE = r"""<!DOCTYPE html>
     .detail-btn { width:100%; padding:12px 10px; text-align:center; }
     .modal-close { width:44px; height:44px; display:flex; align-items:center;
       justify-content:center; padding:0; }
+    .modal-fs { width:44px; height:44px; }
+    #chartModal.fs .cd-chart { height:38vh; }
     /* D3: 모달 하단시트화 + 표 축소 */
     .modal-back { align-items:flex-end; padding:12px; }
     .modal { max-height:88vh; }
@@ -671,7 +684,10 @@ TEMPLATE = r"""<!DOCTYPE html>
           <h3 id="cdTitle">차트 상세</h3>
           <div class="sub" id="cdSub"></div>
         </div>
-        <button class="modal-close" id="cdClose" aria-label="닫기">&times;</button>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button class="modal-fs" id="cdFull" aria-label="전체화면" title="전체화면 (F)">⛶</button>
+          <button class="modal-close" id="cdClose" aria-label="닫기">&times;</button>
+        </div>
       </div>
       <div class="cd-tools">
         <div class="range-tabs" id="cdTabs">
@@ -1048,6 +1064,12 @@ line('grActivity',[L('메시지','gr_messages','#2E84AE'),L('활성 유저','gr_
     inst = new Chart($id('cdCanvas'), {type, data:{labels:lbs, datasets}, options:o});
   }
 
+  function setFs(on){
+    modal.classList.toggle('fs', on);
+    $id('cdFull').setAttribute('aria-label', on ? '전체화면 해제' : '전체화면');
+    $id('cdFull').title = on ? '전체화면 해제 (F)' : '전체화면 (F)';
+    if (inst) requestAnimationFrame(() => inst.resize());
+  }
   function open(id){
     lastFocus = document.activeElement;
     curId = id; range = 30;
@@ -1057,6 +1079,7 @@ line('grActivity',[L('메시지','gr_messages','#2E84AE'),L('활성 유저','gr_
   }
   function close(){
     modal.classList.remove('show'); modal.setAttribute('aria-hidden','true');
+    setFs(false);
     if (inst){ inst.destroy(); inst = null; }
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
@@ -1073,8 +1096,16 @@ line('grActivity',[L('메시지','gr_messages','#2E84AE'),L('활성 유저','gr_
     box.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' '){ e.preventDefault(); open(id); } });
   });
   $id('cdClose').addEventListener('click', close);
+  $id('cdFull').addEventListener('click', () => setFs(!modal.classList.contains('fs')));
   modal.addEventListener('click', e => { if (e.target === modal) close(); });
-  document.addEventListener('keydown', e => { if (e.key==='Escape' && modal.classList.contains('show')) close(); });
+  document.addEventListener('keydown', e => {
+    if (!modal.classList.contains('show')) return;
+    if (e.key === 'Escape'){
+      if (modal.classList.contains('fs')) setFs(false); else close();
+    } else if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey){
+      setFs(!modal.classList.contains('fs'));
+    }
+  });
   $id('cdTabs').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     range = +b.dataset.r; render();
