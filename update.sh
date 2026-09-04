@@ -61,8 +61,9 @@ echo $$ > "$LOCK"; trap 'rm -f "$LOCK"' EXIT
 
   # 4) 배포본 교체 + Vercel 배포(1회 재시도)
   #    채널 → 사이트 경로 매핑은 channels.py 가 단일 소스: "key path" 줄을 읽어 site/<path>/index.html 로 복사.
-  "$PY" -c 'from channels import CHANNELS; [print(c["key"], c["path"]) for c in CHANNELS]' | while read -r key path; do
-    dest="site/${path:+$path/}index.html"
+  #    주의: zsh에서 변수명 path/PATH 는 같은 것이라(빈 값 대입 시 PATH 소멸) 반드시 다른 이름(subdir)을 쓴다.
+  "$PY" -c 'from channels import CHANNELS; [print(c["key"], c["path"]) for c in CHANNELS]' | while read -r key subdir; do
+    dest="site/${subdir:+$subdir/}index.html"
     mkdir -p "$(dirname "$dest")"
     if [ -s "data/$key/dashboard.html" ]; then cp "data/$key/dashboard.html" "$dest"; else echo "(경고) data/$key/dashboard.html 없음 — $dest 유지"; fi
   done
