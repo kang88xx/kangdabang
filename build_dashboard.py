@@ -360,7 +360,10 @@ TEMPLATE = r"""<!DOCTYPE html>
   .grid.grid-auto { grid-template-columns:repeat(auto-fit,minmax(400px,1fr)); align-items:start; }
   .grid.grid-3 { grid-template-columns:1fr 1fr 1fr; }
   .stack { display:grid; gap:12px; }
-  .panel-eyebrow { margin-bottom:8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .panel-eyebrow { margin-bottom:8px; display:flex; align-items:center; gap:10px; flex-wrap:nowrap; white-space:nowrap; min-height:30px; }
+  .panel-eyebrow .datesel { padding:4px 8px; }
+  .sec-head .head-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .sec-head .quota-chip { margin-left:0; }
   .chart-box { background:var(--white); border:1px solid var(--line); padding:14px 16px 10px; min-width:0; }
   .chart-box .eyebrow { margin-bottom:8px; }
   canvas { max-height:196px; max-width:100%; }
@@ -601,13 +604,13 @@ TEMPLATE = r"""<!DOCTYPE html>
     <section>
       <div class="sec-head">
         <div><div class="eyebrow">Channel · Posts</div><h2>채널 — 포스트별 성과</h2></div>
-        <span class="dtag ch">@__CHUSER__</span>
+        <span class="head-right"><button type="button" id="quotaChip" class="quota-chip" title="클릭하면 일자별 사용 내역" hidden>남은횟수: <b>—</b></button><span class="dtag ch">@__CHUSER__</span></span>
       </div>
       <div class="tabs post-months" id="postMonths"></div>
       <div class="tabs post-weeks" id="postWeeks"></div>
       <div class="grid grid-posts" style="align-items:start;">
         <div>
-          <div class="eyebrow panel-eyebrow">TOP 게시물 — <span id="topWeekLabel">선택한 주</span> 조회수 순</div>
+          <div class="eyebrow panel-eyebrow">TOP 게시물 · <span id="topWeekLabel">선택한 주</span> · 조회수 순</div>
           <div class="table-wrap">
             <table><thead><tr>
               <th class="l">#  게시물</th><th>날짜</th><th class="num-wide">조회수</th><th>공유</th><th>댓글</th>
@@ -616,9 +619,8 @@ TEMPLATE = r"""<!DOCTYPE html>
         </div>
         <div>
           <div class="eyebrow panel-eyebrow">
-            <span>게시물 목록 — <span id="listWeekLabel">선택한 주</span></span>
+            <span>게시물 목록 · <span id="listWeekLabel">선택한 주</span></span>
             <select id="postDate" class="datesel"></select>
-            <button type="button" id="quotaChip" class="quota-chip" title="클릭하면 일자별 사용 내역" hidden>남은횟수: <b>—</b></button>
           </div>
           <div class="table-wrap">
             <table><thead><tr>
@@ -1238,8 +1240,8 @@ if (POSTS.length) {
   function showWeek(w){
     cur = w;
     weeksEl.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', Number(b.dataset.mon) === w.mon));
-    document.getElementById('topWeekLabel').textContent = `${wLabel(w)} (${wRange(w)})`;
-    document.getElementById('listWeekLabel').textContent = `${wLabel(w)} (${wRange(w)})`;
+    document.getElementById('topWeekLabel').textContent = wLabel(w);
+    document.getElementById('listWeekLabel').textContent = wLabel(w);
     const posts = w.posts.slice();
     topBody.innerHTML = posts.length
       ? posts.sort((a,b)=>b.views-a.views).slice(0,10).map(topRow).join('')
