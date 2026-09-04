@@ -390,7 +390,14 @@ TEMPLATE = r"""<!DOCTYPE html>
   /* CHARTS */
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   /* 차트 2개(세로) + 목록(우측) · 표 2개 나란히 · 자동 열 */
-  .grid.grid-side { grid-template-columns:1.15fr 1fr; align-items:start; }
+  .grid.grid-side { grid-template-columns:1.15fr 1fr; align-items:stretch; }
+  /* 카드형 패널: 차트 카드와 같은 테두리·라운드, 내부 표는 테두리 없이, 페이저는 바닥에 고정 */
+  .panel { background:var(--white); border:1px solid var(--line); border-radius:var(--radius-panel);
+    padding:14px 18px 14px; min-width:0; display:flex; flex-direction:column; }
+  .panel .panel-eyebrow { min-height:0; margin-bottom:10px; }
+  .panel .panel-body { display:flex; flex-direction:column; flex:1 1 auto; }
+  .panel .table-wrap { border:none; border-radius:12px; }
+  .panel .pager { margin-top:auto; padding-top:10px; }
   .grid.grid-auto { grid-template-columns:repeat(auto-fit,minmax(400px,1fr)); align-items:start; }
   .grid.grid-3 { grid-template-columns:1fr 1fr 1fr; }
   .stack { display:grid; gap:12px; }
@@ -492,9 +499,10 @@ TEMPLATE = r"""<!DOCTYPE html>
   .jl-months { margin-bottom:6px; }
   .jl-months .tab { padding:4px 10px; }
   /* 포스트 표 2개 나란히: 제목은 한 줄 말줄임(마우스 올리면 전체 제목) */
+  .grid.grid-posts { grid-template-columns:1fr; gap:20px; }
   .grid-posts table { table-layout:fixed; }
-  .grid-posts th:not(.l) { width:54px; }
-  .grid-posts th.num-wide { width:66px; }
+  .grid-posts th:not(.l) { width:72px; }
+  .grid-posts th.num-wide { width:84px; }
   .grid-posts td { white-space:nowrap; }
   .grid-posts td.l { overflow:hidden; text-overflow:ellipsis; }
   .grid-posts td.l a.post { }
@@ -611,9 +619,9 @@ TEMPLATE = r"""<!DOCTYPE html>
           <div class="chart-box"><div class="eyebrow">구독자 추이</div><canvas id="subs"></canvas></div>
           <div class="chart-box"><div class="eyebrow">들어옴 · 나감 (일별)</div><canvas id="subsNet"></canvas></div>
         </div>
-        <div>
+        <div class="panel">
           <div class="eyebrow panel-eyebrow">유입 · 이탈 인원 (누가)</div>
-          <div id="joinLeave"></div>
+          <div id="joinLeave" class="panel-body"></div>
         </div>
       </div>
     </section>
@@ -1433,7 +1441,7 @@ function renderJoinLeave(box, src, opts){
         <button class="tab" data-f="left">이탈 <span class="n"></span></button>
       </div>
       <div class="jl-note" id="jlNote" hidden></div>
-      <div class="table-wrap"><table><thead><tr><th class="l">구분</th><th class="l">멤버</th><th>시각</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap" style="flex:1 1 auto;"><table><thead><tr><th class="l">구분</th><th class="l">멤버</th><th>시각</th></tr></thead><tbody></tbody></table></div>
       <div class="pager"></div>`;
     const tabs = box.querySelector('.jl-kinds');
     const mtabs = box.querySelector('.jl-months');
@@ -1454,7 +1462,7 @@ function renderJoinLeave(box, src, opts){
       const ns = tabs.querySelectorAll('.n'); ns[0].textContent = fmt(jl.length); ns[1].textContent = fmt(jn); ns[2].textContent = fmt(lv);
       const items = filter==='all' ? jl : jl.filter(e=>e.kind===filter);
       if (!items.length){ body.innerHTML = `<tr><td class="l" colspan="3" style="text-align:center;color:var(--ink-300);padding:24px;">기록 없음</td></tr>`; pager.innerHTML=''; return; }
-      paginate(body, pager, items, 10, rowFn);
+      paginate(body, pager, items, (opts && opts.pageSize) || 10, rowFn);
     }
     tabs.addEventListener('click', ev=>{
       const t = ev.target.closest('.tab'); if(!t) return;
@@ -1493,7 +1501,7 @@ function renderJoinLeave(box, src, opts){
       <b>유입·이탈 인원 데이터 없음</b><br>${reason}</div>`;
   }
 }
-renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE, {months: JOINLEAVE.months || [], base: "__JLBASE__"});
+renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE, {months: JOINLEAVE.months || [], base: "__JLBASE__", pageSize: 8});
 // 그룹 유입·이탈은 admin log에 안 남으므로 멤버 명단 스냅샷 diff로 추정.
 // 수집 성공(available)이면 항상 노출하되, 방식의 한계를 캡션으로 안내한다.
 (function(){
