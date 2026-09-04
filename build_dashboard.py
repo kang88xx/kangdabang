@@ -210,15 +210,16 @@ TEMPLATE = r"""<!DOCTYPE html>
   .rail { position:sticky; top:0; z-index:20;
     background:rgba(255,255,255,.94); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
     color:var(--grey-700); font-size:13px; border-bottom:1px solid var(--grey-200); }
-  .rail-in { max-width:1180px; margin:0 auto; padding:0 64px; min-height:56px; display:grid;
-    grid-template-columns:auto 1fr auto; gap:16px; align-items:center; }
+  .rail-in { padding:0 24px; min-height:var(--rail-h); display:grid;
+    grid-template-columns:calc(var(--sidebar-w) - 24px) auto 1fr auto; gap:16px; align-items:center; }
+  @media (max-width:1023px) { .rail-in { grid-template-columns:auto auto 1fr auto; } .rail .mid { display:none; } }
   .rail .brand-txt { font-weight:700; font-size:15px; letter-spacing:-.03em; color:var(--grey-900); white-space:nowrap; }
   .rail .mid { color:var(--grey-700); white-space:nowrap; font-weight:500; text-align:center; min-width:0; overflow:hidden; text-overflow:ellipsis; }
   .rail .chlink { color:var(--grey-700); text-decoration:none; transition:color var(--dur-fast) var(--ease); }
   .rail .chlink:hover { color:var(--blue-500); }
   .rail .end { text-align:right; display:flex; gap:10px; align-items:center; justify-content:flex-end; color:var(--grey-600); font-size:12.5px; white-space:nowrap; }
   .rail .end button { white-space:nowrap; }
-  .rail .lead { display:flex; align-items:center; gap:14px; min-width:0; }
+  .rail .lead { display:flex; align-items:center; gap:12px; min-width:0; }
   .chnav { display:inline-flex; gap:2px; padding:3px; background:var(--grey-100); border-radius:var(--radius-pill); }
   .chnav a { font-size:13px; font-weight:500; color:var(--grey-700); text-decoration:none; padding:5px 13px;
     white-space:nowrap; border-radius:var(--radius-pill); transition:background var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease); }
@@ -288,7 +289,38 @@ TEMPLATE = r"""<!DOCTYPE html>
 
   /* (헤더 cover 제거됨 — 상단 정보는 .rail 로 통합) */
 
-  main { max-width:1180px; margin:0 auto; padding:22px 64px 0; }
+  /* ── 좌측 사이드바(Toss catalog shell): 상단바 아래 고정 280px, 본문은 오른쪽으로 ── */
+  :root { --sidebar-w:280px; --rail-h:56px; }
+  main { max-width:calc(1180px + 80px); margin:0 0 0 var(--sidebar-w); padding:22px 40px 0; }
+  .sidebar { position:fixed; z-index:30; top:var(--rail-h); bottom:0; left:0; width:var(--sidebar-w);
+    background:var(--white); border-right:1px solid var(--line); }
+  .sidebar-scroll { height:100%; display:flex; flex-direction:column; overflow-y:auto; padding:32px 20px 20px; }
+  .sidebar-label { margin:0 0 14px; padding-inline:16px; color:var(--grey-600); font-size:13px; font-weight:700;
+    letter-spacing:.08em; text-transform:uppercase; }
+  .sidebar-nav { display:grid; gap:4px; }
+  .sidebar-nav a { min-height:48px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center;
+    border-radius:var(--radius-control); padding-inline:16px; color:var(--grey-700); text-decoration:none;
+    font-size:15px; font-weight:500; transition:background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+  .sidebar-nav a:hover { background:var(--grey-100); color:var(--grey-900); }
+  .sidebar-nav a[aria-current="location"] { background:var(--grey-900); color:#fff; }
+  .sidebar-nav a strong { min-width:32px; min-height:28px; display:inline-flex; align-items:center; justify-content:center;
+    border-radius:var(--radius-pill); padding-inline:8px; background:var(--grey-100); color:var(--grey-600);
+    font-size:13px; font-weight:500; font-variant-numeric:tabular-nums; }
+  .sidebar-nav a[aria-current="location"] strong { background:rgba(255,255,255,.14); color:#fff; }
+  .sidebar-foot { margin-top:auto; padding-top:20px; border-top:1px solid var(--line); }
+  .sidebar-foot .basis-note { margin:0; font-size:12px; line-height:1.55; }
+  .side-back { position:fixed; inset:0; z-index:29; background:rgba(25,31,40,.45); }
+  .side-back[hidden] { display:none; }
+  .menu-btn { display:none; width:40px; height:40px; border:none; background:var(--grey-100); border-radius:var(--radius-control);
+    cursor:pointer; flex-direction:column; align-items:center; justify-content:center; gap:4px; }
+  .menu-btn span { width:16px; height:2px; background:var(--grey-800); border-radius:2px; display:block; }
+  @media (max-width:1023px) {
+    main { margin-left:0; max-width:1180px; margin-inline:auto; }
+    .sidebar { transform:translateX(-100%); transition:transform var(--dur-medium) var(--ease); box-shadow:none; }
+    body.nav-open .sidebar { transform:none; box-shadow:0 20px 60px rgba(25,31,40,.18); }
+    .menu-btn { display:flex; }
+    footer { margin-left:auto; }
+  }
   section { margin-bottom:34px; scroll-margin-top:58px; }
   #topMembers { scroll-margin-top:58px; }
   .basis-note { font-size:12.5px; line-height:1.5; color:var(--grey-600); background:var(--grey-100);
@@ -477,8 +509,8 @@ TEMPLATE = r"""<!DOCTYPE html>
   .empty .tag { display:inline-block; font-size:12px; font-weight:500; color:var(--grey-600); margin-bottom:8px; }
 
   footer { border-top:1px solid var(--line); margin-top:8px;
-    padding:24px 64px 56px; display:flex; align-items:center; justify-content:space-between;
-    flex-wrap:wrap; gap:16px; max-width:1180px; margin-left:auto; margin-right:auto; }
+    padding:24px 40px 56px; display:flex; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; gap:16px; max-width:calc(1180px + 80px); margin-left:var(--sidebar-w); margin-right:auto; }
   footer .note { font-size:12px; color:var(--grey-500); }
   @media (max-width:760px) { .grid, .grid.grid-side, .grid.grid-auto, .grid.grid-3 { grid-template-columns:1fr; }
     .note-box dl { grid-template-columns:1fr; gap:2px 0; }
@@ -486,7 +518,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     .rail-in, main, footer { padding-left:24px; padding-right:24px; }
     /* D2: 상단바 1행화 — "KANGTEAROOM DATA"·채널 링크 숨기고 [채널 토글 | 갱신·사용자] 2열, 높이 축소 */
     .rail .brand-txt, .rail .mid { display:none; }
-    .rail-in { grid-template-columns:auto 1fr; align-items:center; gap:8px;
+    .rail-in { grid-template-columns:auto auto 1fr; align-items:center; gap:8px;
       padding-top:6px; padding-bottom:6px; }
     .rail .end { flex-wrap:wrap; gap:4px 10px; font-size:10px; letter-spacing:.04em; }
     .chnav a { padding:9px 12px; }
@@ -536,19 +568,29 @@ TEMPLATE = r"""<!DOCTYPE html>
 
   <div class="rail">
     <div class="rail-in">
-      <span class="lead"><span class="brand-txt">Kangtearoom Data</span><nav class="chnav" aria-label="채널 선택">__NAV__</nav></span>
+      <span class="lead"><button type="button" class="menu-btn" id="menuBtn" aria-label="메뉴 열기" aria-expanded="false"><span></span><span></span><span></span></button><span class="brand-txt">Kangtearoom Data</span></span>
+      <nav class="chnav" aria-label="채널 선택">__NAV__</nav>
       <span class="mid">__RAILMID__</span>
       <span class="end"><span id="lastUpdated">최종 업데이트 __GENERATED__ KST</span><button id="refreshBtn" class="refresh-btn" hidden>지금 갱신</button><span id="userChip" hidden><span class="who"></span><button type="button" id="logoutBtn" class="logout-btn">로그아웃</button></span></span>
     </div>
   </div>
   <div id="refreshToast" class="refresh-toast" role="status" aria-live="polite" hidden></div>
 
+  <div class="side-back" id="sideBack" hidden></div>
+  <aside class="sidebar" id="sidebar" aria-label="섹션 메뉴">
+    <div class="sidebar-scroll">
+      <div class="sidebar-label">__CHNAME__</div>
+      <nav class="sidebar-nav" id="sideNav"></nav>
+      <div class="sidebar-foot">
+        <div class="basis-note">데이터 기준 · <b>한국시간(KST) 오전 9시 ~ 다음날 09시 = 1일</b> · 하루 48회 자동 갱신</div>
+      </div>
+    </div>
+  </aside>
+
   <main>
 
-    <div class="basis-note">데이터 기준 · <b>한국시간(KST) 오전 9시 ~ 다음날 09시 = 1일(24시간)</b> · 하루 48회 자동 갱신</div>
-
     <!-- 01 OVERVIEW -->
-    <section>
+    <section id="sec-overview">
       <div class="sec-head">
         <div><div class="eyebrow">Overview</div><h2>오늘의 핵심 지표</h2></div>
       </div>
@@ -590,7 +632,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     </section>
 
     <!-- 04 CHANNEL 포스트 -->
-    <section>
+    <section id="sec-posts">
       <div class="sec-head">
         <div><div class="eyebrow">Channel · Posts</div><h2>채널 — 포스트별 성과</h2></div>
         <span class="head-right"><button type="button" id="quotaChip" class="quota-chip" title="클릭하면 일자별 사용 내역" hidden>남은횟수: <b>—</b></button><span class="dtag ch">@__CHUSER__</span></span>
@@ -623,7 +665,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     </section>
 
     <!-- 05 CHANNEL 공식 통계 -->
-    <section>
+    <section id="sec-official">
       <div class="sec-head">
         <div><div class="eyebrow">Channel · Official</div><h2>채널 — 공식 통계</h2></div>
         <span class="dtag ch">@__CHUSER__</span>
@@ -1550,6 +1592,63 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE, {months: JOINLE
     `<button type="button" class="tab" data-m="${m}">${Number(m.slice(5))}월<span class="sub">${m.slice(0,4)!==latestYear ? m.slice(0,4)+' · ' : ''}${byMonth[m].length}건</span></button>`).join('');
   monthsEl.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => show(b.dataset.m)));
   show(months[months.length-1]);
+})();
+
+// ---------- 좌측 사이드바: 섹션 목록(건수 배지) · 현재 위치 · 모바일 드로어 ----------
+(function(){
+  const nav = document.getElementById('sideNav');
+  if (!nav) return;
+  // 섹션 id → 메뉴 라벨 · 배지 숫자(있을 때만)
+  const META = {
+    'sec-overview': {label:'핵심 지표'},
+    'sec-subs':     {label:'구독자 증감', count: () => (JOINLEAVE && JOINLEAVE.available ? (JOINLEAVE.events||[]).length : null)},
+    'sec-reach':    {label:'조회 · 참여'},
+    'sec-posts':    {label:'포스트 성과', count: () => POSTS.length || null},
+    'sec-official': {label:'공식 통계', count: () => (OFFICIAL && OFFICIAL.available ? Object.keys(OFFICIAL.metrics||{}).length : null)},
+    'sec-group':    {label:'그룹 활동', count: () => (MEMBERS && MEMBERS.length) || null},
+    'sec-cobak':    {label:'코박 활동', count: () => (COBAK && COBAK.available && COBAK.totals ? COBAK.totals.posts : null)},
+    'sec-access':   {label:'접속 로그'},
+    'sec-profile':  {label:'내 계정'},
+  };
+  const sections = () => Array.from(document.querySelectorAll('main > section[id]')).filter(s => !s.hidden);
+  let current = null;
+  function build(){
+    nav.innerHTML = sections().map(sec => {
+      const m = META[sec.id] || {label: (sec.querySelector('h2')||sec).textContent.trim()};
+      const n = m.count ? m.count() : null;
+      return `<a href="#${sec.id}" data-id="${sec.id}"${sec.id===current?' aria-current="location"':''}>${m.label}${n!=null?`<strong>${fmt(n)}</strong>`:''}</a>`;
+    }).join('');
+  }
+  function setCurrent(id){
+    if (id === current) return;
+    current = id;
+    nav.querySelectorAll('a').forEach(a => { if (a.dataset.id===id) a.setAttribute('aria-current','location'); else a.removeAttribute('aria-current'); });
+  }
+  build();
+  // 화면 중앙에 가장 가까운 섹션을 현재 위치로
+  function track(){
+    const mid = window.innerHeight * .35;
+    let best = null, bestD = Infinity;
+    for (const sec of sections()){
+      const r = sec.getBoundingClientRect();
+      const d = (r.top <= mid && r.bottom >= mid) ? 0 : Math.min(Math.abs(r.top-mid), Math.abs(r.bottom-mid));
+      if (d < bestD){ bestD = d; best = sec.id; }
+    }
+    if (best) setCurrent(best);
+  }
+  let raf = null;
+  window.addEventListener('scroll', () => { if (raf) return; raf = requestAnimationFrame(() => { raf=null; track(); }); }, {passive:true});
+  window.addEventListener('resize', track);
+  track();
+  // 접속 로그/내 계정처럼 로그인 후 나타나는 섹션 반영
+  new MutationObserver(() => { build(); track(); }).observe(document.querySelector('main'), {attributes:true, subtree:true, attributeFilter:['hidden']});
+  // 모바일 드로어
+  const btn = document.getElementById('menuBtn'), back = document.getElementById('sideBack');
+  const open = v => { document.body.classList.toggle('nav-open', v); back.hidden = !v; if (btn) btn.setAttribute('aria-expanded', String(v)); };
+  if (btn) btn.addEventListener('click', () => open(!document.body.classList.contains('nav-open')));
+  back.addEventListener('click', () => open(false));
+  nav.addEventListener('click', e => { const a = e.target.closest('a'); if (!a) return; setCurrent(a.dataset.id); if (window.innerWidth < 1024) open(false); });
+  document.addEventListener('keydown', e => { if (e.key==='Escape' && document.body.classList.contains('nav-open')) open(false); });
 })();
 
 // ---------- 인증 게이트 + 접속 로그(마스터) ----------
