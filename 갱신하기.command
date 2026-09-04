@@ -4,4 +4,4 @@ cd "$(dirname "$0")" || exit 1
 echo "캉티룸 통계 갱신 중… (30초~2분 소요)"
 ./update.sh
 echo "완료. 크롬으로 엽니다."
-open -a "Google Chrome" data/dashboard.html
+open -a "Google Chrome" data/kang/dashboard.html

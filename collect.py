@@ -11,11 +11,9 @@ from telethon.tl.functions.stats import (
     GetBroadcastStatsRequest, GetMessagePublicForwardsRequest,
 )
 
-from config import API_ID, API_HASH, CHANNEL, GROUP
+from config import API_ID, API_HASH
+from channels import CHANNELS, PRIMARY, data_dir, migrate_legacy_layout
 from tg_graphs import load_graph, parse_graph, by_name
-
-OUT_DIR = Path(__file__).parent / "data"
-OUT_DIR.mkdir(exist_ok=True)
 
 POST_WINDOW = 150          # 포스트 표/공유처 분석에 사용할 최근 게시물 수
 FWD_TOP_N = 40             # 공유처를 조회할 상위(공유수) 포스트 수
@@ -194,13 +192,13 @@ async def collect_join_leave(client, entity, limit=500):
         return {"available": False, "reason": f"{type(ex).__name__}: {ex}"}
     return {"available": True, "events": events}
 
-def write_json(name, obj):
-    (OUT_DIR / name).write_text(json.dumps(obj, ensure_ascii=False, indent=2),
-                               encoding="utf-8")
+def write_json(out_dir, name, obj):
+    (out_dir / name).write_text(json.dumps(obj, ensure_ascii=False, indent=2),
+                                encoding="utf-8")
 
 
-def _load_json(name, default=None):
-    p = OUT_DIR / name
+def _load_json(out_dir, name, default=None):
+    p = out_dir / name
     if p.exists():
         try:
             return json.loads(p.read_text(encoding="utf-8"))
@@ -209,7 +207,7 @@ def _load_json(name, default=None):
     return default
 
 
-async def collect_group_member_diff(client, entity, detected_iso, history_limit=500):
+async def collect_group_member_diff(client, entity, out_dir, detected_iso, history_limit=1000):
     """그룹은 admin log에 공개 가입이 안 남으므로, 멤버 명단 스냅샷을 매 수집마다
     비교(diff)해서 '누가' 들어오고 나갔는지 추정한다.
       - 첫 수집  : 기준선(baseline)만 저장, 이벤트 없음
@@ -228,15 +226,15 @@ async def collect_group_member_diff(client, entity, detected_iso, history_limit=
                 "reason": f"{type(ex).__name__}: {ex}"}
 
     # 직전 명단 스냅샷 + 기존 누적 이벤트 보존
-    prev = _load_json("group_members_snapshot.json")
-    existing = _load_json("join_leave_group.json", {})
+    prev = _load_json(out_dir, "group_members_snapshot.json")
+    existing = _load_json(out_dir, "join_leave_group.json", {})
     history = existing.get("events", []) if isinstance(existing, dict) else []
 
     snapshot = {"detected": detected_iso, "members": cur}
 
     if not isinstance(prev, dict) or not prev.get("members"):
         # 첫 수집 = 기준선만 저장 (diff는 다음 수집부터)
-        write_json("group_members_snapshot.json", snapshot)
+        write_json(out_dir, "group_members_snapshot.json", snapshot)
         return {"available": True, "method": "snapshot", "baseline": True,
                 "events": history, "member_count": len(cur)}
 
@@ -256,55 +254,54 @@ async def collect_group_member_diff(client, entity, detected_iso, history_limit=
                            "id": int(lid)})
 
     events = (new_events + history)[:history_limit]   # 최신이 위로
-    write_json("group_members_snapshot.json", snapshot)
+    write_json(out_dir, "group_members_snapshot.json", snapshot)
     return {"available": True, "method": "snapshot", "baseline": False,
             "events": events, "member_count": len(cur),
             "new_join": sum(1 for e in new_events if e["kind"] == "join"),
             "new_left": sum(1 for e in new_events if e["kind"] == "left")}
 
 
-async def main():
-    # 1일 기준 = 한국시간(KST) 오전 9시 ~ 다음날 9시 = UTC 00:00 ~ 24:00.
-    # 텔레그램 공식 통계 그래프가 UTC 일 버킷(=KST 9시)이므로 동일 기준으로 맞춘다.
-    now_utc = datetime.now(timezone.utc)
-    since = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)  # 오늘 버킷 시작(=KST 오늘 9시)
-    today = now_utc.strftime("%Y-%m-%d")                                # 그래프와 동일한 UTC 날짜 라벨
+async def collect_one(client, ch, now_utc, since, today):
+    """채널 1개(+연결 그룹) 수집 → data/<key>/ 에 저장."""
+    out = data_dir(ch["key"])
+    CHANNEL, GROUP = ch["channel"], ch.get("group")
+    print(f"\n=== [{ch['name']}] {CHANNEL}{(' + ' + GROUP) if GROUP else ''} ===")
 
-    async with TelegramClient("my_session", API_ID, API_HASH) as client:
-        print(f"=== 통계 수집 ({today}) ===\n")
+    ent, chs, posts = await collect_channel(client, CHANNEL, since)
+    print(f"[채널 {CHANNEL}] 구독자 {chs['subscribers']:,} · "
+          f"24h 포스트 {chs['new_posts']} · 조회 {chs['views']:,} · "
+          f"수집 포스트 {len(posts)}건")
 
-        ent, ch, posts = await collect_channel(client, CHANNEL, since)
-        print(f"[채널 {CHANNEL}] 구독자 {ch['subscribers']:,} · "
-              f"24h 포스트 {ch['new_posts']} · 조회 {ch['views']:,} · "
-              f"수집 포스트 {len(posts)}건")
-
+    gr = None
+    if GROUP:
         gr = await collect_group(client, GROUP, since)
         print(f"[그룹 {GROUP}] 멤버 {gr['members']:,} · "
               f"메시지 {gr['messages']:,} · 활성 {gr['active_users']:,}")
 
-        official = await collect_broadcast_stats(client, ent)
-        write_json("broadcast_stats.json", official)
-        print(f"공식 통계 : {'수집됨' if official.get('available') else '미생성'}")
+    official = await collect_broadcast_stats(client, ent)
+    write_json(out, "broadcast_stats.json", official)
+    print(f"공식 통계 : {'수집됨' if official.get('available') else '미생성'}")
 
-        ch_joined, ch_left = await collect_followers_today(client, ent)
-        if ch_joined is not None or ch_left is not None:
-            print(f"오늘 유입 : 들어옴 {ch_joined or 0} · 나감 {ch_left or 0}")
+    ch_joined, ch_left = await collect_followers_today(client, ent)
+    if ch_joined is not None or ch_left is not None:
+        print(f"오늘 유입 : 들어옴 {ch_joined or 0} · 나감 {ch_left or 0}")
 
-        joinleave = await collect_join_leave(client, ent)
-        write_json("join_leave.json", joinleave)
-        if joinleave.get("available"):
-            ev = joinleave["events"]
-            jn = sum(1 for e in ev if e["kind"] == "join")
-            lv = sum(1 for e in ev if e["kind"] == "left")
-            print(f"유입/이탈 : 유입 {jn} · 이탈 {lv} (admin log {len(ev)}건)")
-        else:
-            print(f"유입/이탈 : 미수집 — {joinleave.get('reason', '')}")
+    joinleave = await collect_join_leave(client, ent)
+    write_json(out, "join_leave.json", joinleave)
+    if joinleave.get("available"):
+        ev = joinleave["events"]
+        jn = sum(1 for e in ev if e["kind"] == "join")
+        lv = sum(1 for e in ev if e["kind"] == "left")
+        print(f"유입/이탈 : 유입 {jn} · 이탈 {lv} (admin log {len(ev)}건)")
+    else:
+        print(f"유입/이탈 : 미수집 — {joinleave.get('reason', '')}")
 
+    if GROUP:
         # 그룹은 admin log에 공개 가입이 안 남으므로 멤버 명단 스냅샷 diff로 추정.
         gr_ent = await client.get_entity(GROUP)
-        joinleave_gr = await collect_group_member_diff(client, gr_ent,
+        joinleave_gr = await collect_group_member_diff(client, gr_ent, out,
                                                        now_utc.isoformat())
-        write_json("join_leave_group.json", joinleave_gr)
+        write_json(out, "join_leave_group.json", joinleave_gr)
         if not joinleave_gr.get("available"):
             print(f"그룹 유입/이탈 : 미수집 — {joinleave_gr.get('reason', '')}")
         elif joinleave_gr.get("baseline"):
@@ -315,56 +312,86 @@ async def main():
                   f"이탈 {joinleave_gr.get('new_left', 0)} "
                   f"(누적 {len(joinleave_gr['events'])}건)")
 
-        fwds = await collect_post_forwards(client, ent, posts)
-        write_json("post_forwards.json", fwds)
-        print(f"공유처    : {len(fwds)}개 포스트")
+    fwds = await collect_post_forwards(client, ent, posts)
+    write_json(out, "post_forwards.json", fwds)
+    print(f"공유처    : {len(fwds)}개 포스트")
 
-        write_json("group_top_members.json", gr["top_members"])
-        print(f"활발 멤버 : {len(gr['top_members'])}명\n")
+    if gr:
+        write_json(out, "group_top_members.json", gr["top_members"])
+        print(f"활발 멤버 : {len(gr['top_members'])}명")
 
-        # 포스트 CSV (대시보드 표/공유처 매칭용)
-        posts_csv = OUT_DIR / f"channel_posts_{today}.csv"
-        with posts_csv.open("w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=["date", "id", "views", "forwards", "replies", "text"])
-            w.writeheader()
-            w.writerows(posts)
-        print(f"포스트 → {posts_csv}")
+    # 포스트 CSV (대시보드 표/공유처 매칭용)
+    posts_csv = out / f"channel_posts_{today}.csv"
+    with posts_csv.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=["date", "id", "views", "forwards", "replies", "text"])
+        w.writeheader()
+        w.writerows(posts)
+    print(f"포스트 → {posts_csv}")
 
-        # 일일 요약 (같은 날짜는 1행만 — 멱등 · 역수집 컬럼 보존)
-        summary_csv = OUT_DIR / "daily_summary.csv"
-        header = ["date", "ch_subscribers", "ch_joined", "ch_left", "ch_new_posts",
-                  "ch_views", "ch_forwards", "ch_replies",
-                  "gr_members", "gr_messages", "gr_active_users"]
-        existing = {}
-        if summary_csv.exists():
-            with summary_csv.open(encoding="utf-8") as f:
-                for r in csv.DictReader(f):
-                    existing[r["date"]] = r
-        # B6 가드: 구독자/멤버는 항상 양수여야 하는 스냅샷 지표. 수집 실패로 0/None이면
-        # 오늘 행을 갱신하지 않고 옛 정상값을 보존(0 절벽 데이터 방지).
-        if not ch["subscribers"] or not gr["members"]:
-            print(f"!!! 핵심 지표 비정상(구독자={ch['subscribers']} 멤버={gr['members']}) "
-                  f"— daily_summary {today} 행 갱신 건너뜀(옛 값 보존)")
-        else:
-            existing[today] = {
-                "date": today,
-                "ch_subscribers": ch["subscribers"],
-                "ch_joined": "" if ch_joined is None else ch_joined,
-                "ch_left": "" if ch_left is None else ch_left,
-                "ch_new_posts": ch["new_posts"],
-                "ch_views": ch["views"],
-                "ch_forwards": ch["forwards"],
-                "ch_replies": ch["replies"],
-                "gr_members": gr["members"],
-                "gr_messages": gr["messages"],
-                "gr_active_users": gr["active_users"],
-            }
-        rows = [{k: existing[d].get(k, "") for k in header} for d in sorted(existing)]
-        with summary_csv.open("w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=header)
-            w.writeheader()
-            w.writerows(rows)
-        print(f"요약 → {summary_csv} ({len(rows)}일)")
+    # 일일 요약 (같은 날짜는 1행만 — 멱등 · 역수집 컬럼 보존)
+    summary_csv = out / "daily_summary.csv"
+    header = ["date", "ch_subscribers", "ch_joined", "ch_left", "ch_new_posts",
+              "ch_views", "ch_forwards", "ch_replies",
+              "gr_members", "gr_messages", "gr_active_users"]
+    existing = {}
+    if summary_csv.exists():
+        with summary_csv.open(encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                existing[r["date"]] = r
+    # B6 가드: 구독자/멤버는 항상 양수여야 하는 스냅샷 지표. 수집 실패로 0/None이면
+    # 오늘 행을 갱신하지 않고 옛 정상값을 보존(0 절벽 데이터 방지).
+    if not chs["subscribers"] or (gr and not gr["members"]):
+        print(f"!!! 핵심 지표 비정상(구독자={chs['subscribers']} "
+              f"멤버={gr['members'] if gr else '-'}) "
+              f"— daily_summary {today} 행 갱신 건너뜀(옛 값 보존)")
+    else:
+        existing[today] = {
+            "date": today,
+            "ch_subscribers": chs["subscribers"],
+            "ch_joined": "" if ch_joined is None else ch_joined,
+            "ch_left": "" if ch_left is None else ch_left,
+            "ch_new_posts": chs["new_posts"],
+            "ch_views": chs["views"],
+            "ch_forwards": chs["forwards"],
+            "ch_replies": chs["replies"],
+            "gr_members": gr["members"] if gr else "",
+            "gr_messages": gr["messages"] if gr else "",
+            "gr_active_users": gr["active_users"] if gr else "",
+        }
+    rows = [{k: existing[d].get(k, "") for k in header} for d in sorted(existing)]
+    with summary_csv.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=header)
+        w.writeheader()
+        w.writerows(rows)
+    print(f"요약 → {summary_csv} ({len(rows)}일)")
+
+
+async def main():
+    # 1일 기준 = 한국시간(KST) 오전 9시 ~ 다음날 9시 = UTC 00:00 ~ 24:00.
+    # 텔레그램 공식 통계 그래프가 UTC 일 버킷(=KST 9시)이므로 동일 기준으로 맞춘다.
+    now_utc = datetime.now(timezone.utc)
+    since = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)  # 오늘 버킷 시작(=KST 오늘 9시)
+    today = now_utc.strftime("%Y-%m-%d")                                # 그래프와 동일한 UTC 날짜 라벨
+
+    migrate_legacy_layout()          # 옛 단일 채널 파일 → data/kang/ (최초 1회)
+
+    failed = []
+    async with TelegramClient("my_session", API_ID, API_HASH) as client:
+        print(f"=== 통계 수집 ({today}) — 채널 {len(CHANNELS)}개 ===")
+        for ch in CHANNELS:
+            if not ch.get("channel"):
+                print(f"\n=== [{ch['name']}] @username 미설정 — 수집 건너뜀 (channels.py) ===")
+                continue
+            try:
+                await collect_one(client, ch, now_utc, since, today)
+            except Exception as e:
+                # 주 채널(첫 번째) 실패는 치명적 → update.sh 게이트가 배포를 막도록 예외 전파.
+                if ch is PRIMARY:
+                    raise
+                failed.append(ch["name"])
+                print(f"!!! [{ch['name']}] 수집 실패 — {type(e).__name__}: {e} (옛 데이터 유지)")
+    if failed:
+        print(f"\n보조 채널 수집 실패: {', '.join(failed)} — 주 채널은 정상, 배포 계속")
 
 
 if __name__ == "__main__":

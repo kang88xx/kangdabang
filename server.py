@@ -3,7 +3,7 @@
 브라우저(정적 HTML)는 텔레그램 수집(collect.py)을 직접 실행할 수 없으므로,
 이 작은 로컬 서버가 버튼 클릭(POST /refresh)을 받아 수집→빌드를 대신 실행한다.
 
-  GET  /          → data/dashboard.html (가장 최근 빌드된 대시보드)
+  GET  /          → data/kang/dashboard.html (가장 최근 빌드된 대시보드)
   POST /refresh   → collect.py 실행 후 build_dashboard.py 실행, 결과를 JSON으로 반환
 
 표준 라이브러리만 사용한다(추가 설치 불필요). 수집/빌드는 이 서버를 띄운
@@ -27,7 +27,7 @@ from threading import Lock
 
 ROOT = Path(__file__).parent
 DATA_DIR = ROOT / "data"
-DASHBOARD = DATA_DIR / "dashboard.html"
+DASHBOARD = DATA_DIR / "kang" / "dashboard.html"   # 로컬 서버는 주 채널(캉다방) 대시보드
 PY = sys.executable                      # server.py 를 띄운 동일 파이썬(venv 권장)
 PORT = int(os.environ.get("PORT", "8765"))
 REFRESH_TIMEOUT = 600                     # 수집+빌드 합산 최대 대기(초)

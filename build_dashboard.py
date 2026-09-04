@@ -13,10 +13,10 @@ OkardCare Design System v1.0 (Forest/Signal 팔레트, Pretendard + Geist Mono, 
 
 
 사용법:
-    python build_dashboard.py                  # data/daily_summary.csv 사용
-    python build_dashboard.py data/sample_summary.csv
+    python build_dashboard.py                  # channels.py 의 모든 채널 (data/<key>/daily_summary.csv)
+    python build_dashboard.py --only kang       # 특정 채널만
 
-결과: data/dashboard.html
+결과: data/<key>/dashboard.html (채널별)
 """
 import base64
 import csv
@@ -29,17 +29,10 @@ from pathlib import Path
 KST = timezone(timedelta(hours=9))   # 포스트 시각을 한국시간으로 표시
 
 ROOT = Path(__file__).parent
-DATA_DIR = ROOT / "data"
-SRC = Path(sys.argv[1]) if len(sys.argv) > 1 else DATA_DIR / "daily_summary.csv"
-OUT = DATA_DIR / "dashboard.html"
+from channels import CHANNELS, data_dir, migrate_legacy_layout   # noqa: E402
 
-# 채널/그룹 username (포스트 링크 생성용). config.py 없으면 기본값 사용.
-try:
-    from config import CHANNEL, GROUP
-    CH_USER = CHANNEL.lstrip("@")
-    GR_USER = GROUP.lstrip("@")
-except Exception:
-    CH_USER, GR_USER = "kang_tearoom", "kangtearoom_chat"
+# 사용법: python build_dashboard.py            → 모든 채널 (data/<key>/dashboard.html)
+#         python build_dashboard.py --only kang → 특정 채널만
 
 
 def load_summary(path):
@@ -52,7 +45,7 @@ def load_summary(path):
     return rows
 
 
-def load_latest_posts():
+def load_latest_posts(DATA_DIR):
     """가장 최근 channel_posts_*.csv 를 읽어 포스트 리스트 반환 (조회수>0 만)."""
     files = sorted(glob.glob(str(DATA_DIR / "channel_posts_*.csv")))
     if not files:
@@ -84,7 +77,7 @@ def load_latest_posts():
     return posts
 
 
-def load_json(name, default):
+def load_json(DATA_DIR, name, default):
     p = DATA_DIR / name
     if p.exists():
         try:
@@ -99,18 +92,22 @@ def load_json(name, default):
 # 기준시각(baseline) 이후 올라온 채널 게시글 수 = 사용량. 사용 내역은 data/quota.json에
 # 게시글 id별로 누적 저장하므로, 매 갱신 재계산해도 이중 차감이 없고 옛 글이
 # CSV 수집 창(POST_WINDOW)에서 밀려나도 사용량이 유지된다.
-# 잔여 횟수를 수동 보정(충전 등)하려면 data/quota.json의 "total" 값을 고치면 된다.
-QUOTA_FILE = DATA_DIR / "quota.json"
-QUOTA_TOTAL = 105                                   # 최초 생성 시 기본값 (이후엔 파일 값 우선)
-QUOTA_BASELINE = "2026-08-10T13:49:00+09:00"        # 이 시각 기준 잔여 105회 (2026-08-10 잔여 변동 반영)
-
-
-def update_quota(posts):
+# 총 횟수·기준시각은 channels.py 의 quota 설정(mode:"count")에서 온다. 기준시각을 바꾸면
+# 카운터가 자동 리셋된다. mode:"deadline" 이면 횟수 대신 마감일 D-day 를 표기한다.
+def update_quota(posts, DATA_DIR, qcfg):
+    if not qcfg:
+        return {"available": False}
+    if qcfg.get("mode") == "deadline":
+        return {"available": True, "mode": "deadline",
+                "deadline": qcfg["deadline"], "label": qcfg.get("label", "")}
+    QUOTA_FILE = DATA_DIR / "quota.json"
+    QUOTA_TOTAL = int(qcfg.get("total", 0))
+    QUOTA_BASELINE = qcfg["baseline"]
     try:
         q = json.loads(QUOTA_FILE.read_text(encoding="utf-8"))
     except Exception:
         q = {}
-    # 기준시각이 코드와 다르면(충전·잔여 보정으로 QUOTA_BASELINE을 갱신한 경우)
+    # 기준시각이 코드와 다르면(충전·잔여 보정으로 baseline을 갱신한 경우)
     # 기존 카운터를 버리고 새 기준으로 리셋한다 — 파일 값이 코드보다 우선이라 이 마이그레이션이 필요.
     if q.get("baseline") != QUOTA_BASELINE:
         q = {}
@@ -143,6 +140,7 @@ def update_quota(posts):
     used = len(counted)
     return {
         "available": True,
+        "mode": "count",
         "total": q["total"],
         "used": used,
         "remaining": max(0, q["total"] - used),
@@ -156,7 +154,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kangtearoom Data Analysis</title>
+<title>__CHNAME__ · Kangtearoom Data</title>
 <link rel="icon" type="image/png" href="__FAVICON__">
 <link rel="apple-touch-icon" href="__FAVICON__">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -195,6 +193,14 @@ TEMPLATE = r"""<!DOCTYPE html>
     border-bottom:1px solid rgba(255,255,255,.28); padding-bottom:1px; transition:color .15s,border-color .15s; }
   .rail .chlink:hover { color:var(--signal); border-color:var(--signal); }
   .rail .end { text-align:right; display:flex; gap:12px; align-items:center; justify-content:flex-end; }
+  .rail .lead { display:flex; align-items:center; gap:14px; min-width:0; }
+  .chnav { display:inline-flex; border:1px solid rgba(255,255,255,.28); }
+  .chnav a { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.04em; text-transform:none;
+    color:rgba(255,255,255,.72); text-decoration:none; padding:4px 11px; white-space:nowrap;
+    transition:background .15s,color .15s; }
+  .chnav a + a { border-left:1px solid rgba(255,255,255,.28); }
+  .chnav a:hover { color:#fff; background:rgba(255,255,255,.08); }
+  .chnav a.active { color:#0C3F30; background:#14B87D; font-weight:600; }
   .refresh-btn { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.14em;
     text-transform:uppercase; color:#0C3F30; background:#14B87D; border:none;
     padding:5px 11px; cursor:pointer; border-radius:0; transition:opacity .15s, background .15s; }
@@ -311,6 +317,9 @@ TEMPLATE = r"""<!DOCTYPE html>
     padding:5px 10px; cursor:pointer; transition:border-color .15s,color .15s; }
   .quota-chip b { color:var(--signal); font-weight:600; }
   .quota-chip:hover { border-color:var(--forest-300); color:var(--forest-500); }
+  .quota-chip.static { cursor:default; }
+  .quota-chip.static:hover { border-color:var(--line); color:var(--forest-700); }
+  .quota-chip .due { color:var(--ink-500); }
 
   /* DETAIL BUTTON + MODAL */
   .card .detail-btn { margin-top:12px; font-family:'Geist Mono',monospace; font-size:10.5px;
@@ -449,11 +458,12 @@ TEMPLATE = r"""<!DOCTYPE html>
     .note-box dl { grid-template-columns:1fr; gap:2px 0; }
     .note-box dt { margin-top:8px; }
     .rail-in, main, footer { padding-left:24px; padding-right:24px; }
-    /* D2: 상단바 1행화 — "KANGTEAROOM DATA" 숨기고 2열 정리, 높이 축소 */
-    .rail-in > span:first-child { display:none; }
-    .rail-in { grid-template-columns:1fr auto; align-items:center; gap:8px;
+    /* D2: 상단바 1행화 — "KANGTEAROOM DATA"·채널 링크 숨기고 [채널 토글 | 갱신·사용자] 2열, 높이 축소 */
+    .rail .brand-txt, .rail .mid { display:none; }
+    .rail-in { grid-template-columns:auto 1fr; align-items:center; gap:8px;
       padding-top:6px; padding-bottom:6px; }
-    .rail .mid { white-space:normal; letter-spacing:.02em; text-align:left; }
+    .rail .end { flex-wrap:wrap; gap:4px 10px; font-size:10px; letter-spacing:.04em; }
+    .chnav a { padding:9px 12px; }
     .rail .end { justify-content:flex-end; }
     /* 1행 rail에 맞춰 섹션 앵커 보정 */
     section, #topMembers { scroll-margin-top:54px; }
@@ -487,7 +497,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   <div id="authOverlay">
     <form class="auth-card" id="authForm" autocomplete="off">
       <div class="brand">Kangtearoom · Internal</div>
-      <h1>캉다방 통계</h1>
+      <h1>__CHNAME__ 통계</h1>
       <div class="sub">내부 전용 — 계정으로 로그인하세요.</div>
       <label for="authUser">아이디</label>
       <input id="authUser" name="username" type="text" autocomplete="username" autofocus>
@@ -500,8 +510,8 @@ TEMPLATE = r"""<!DOCTYPE html>
 
   <div class="rail">
     <div class="rail-in">
-      <span>KANGTEAROOM DATA</span>
-      <span class="mid"><a class="chlink" href="https://t.me/__CHUSER__" target="_blank" rel="noopener">@__CHUSER__</a> · <a class="chlink" href="https://t.me/__GRUSER__" target="_blank" rel="noopener">@__GRUSER__</a></span>
+      <span class="lead"><span class="brand-txt">KANGTEAROOM DATA</span><nav class="chnav" aria-label="채널 선택">__NAV__</nav></span>
+      <span class="mid">__RAILMID__</span>
       <span class="end"><span id="lastUpdated">최종 업데이트 __GENERATED__ KST</span><button id="refreshBtn" class="refresh-btn" hidden>지금 갱신</button><span id="userChip" hidden><span class="who"></span><button type="button" id="logoutBtn" class="logout-btn">로그아웃</button></span></span>
     </div>
   </div>
@@ -717,8 +727,12 @@ const MEMBERS  = __MEMBERS__;
 const COBAK    = __COBAK__;      // { available, nickname, totals:{posts,views,recommend,comments}, posts:[{id,title,url,views,recommend,comments,date}] }
 const JOINLEAVE= __JOINLEAVE__;  // { available, events:[{date,kind,name,username,id}] }
 const JOINLEAVE_GR = __JOINLEAVE_GR__;  // 그룹 유입·이탈
-const QUOTA    = __QUOTA__;      // 게시글 서비스 남은횟수 { total, used, remaining, start, daily:[{date,count}] }
+const QUOTA    = __QUOTA__;      // 게시글 서비스 { mode:"count", total, used, remaining, start, daily } | { mode:"deadline", deadline, label }
 const CH_USER  = "__CHUSER__";
+const HAS_GROUP = __HAS_GROUP__; // 연결 그룹 없으면 그룹 섹션·카드 숨김
+const HAS_COBAK = __HAS_COBAK__; // 코박 섹션 표시 여부
+if (!HAS_GROUP) { const g = document.getElementById('sec-group'); if (g) g.remove(); }
+if (!HAS_COBAK) { const c = document.getElementById('sec-cobak'); if (c) c.remove(); }
 
 const fmt  = n => Number(n).toLocaleString('ko-KR');
 const pct  = n => (n*100).toFixed(1) + '%';
@@ -757,7 +771,7 @@ function avg7(key, v){
   const subsVals = recent7.map(r=>r.ch_subscribers).filter(v=>v!=null);
   const subsDelta = subsVals.length>=2 ? subsVals[subsVals.length-1]-subsVals[0] : null;
   const viewsAvg = avgOf(recent7, 'ch_views');
-  const msgAvg   = avgOf(recent7, 'gr_messages');
+  const msgAvg   = HAS_GROUP ? avgOf(recent7, 'gr_messages') : null;
   const head = n>=7 ? '최근 7일' : `집계 ${n}일`;
   const parts = [];
   if (subsDelta != null){
@@ -778,7 +792,7 @@ const cards = [
   {label:'그룹 메시지 (일)', key:'gr_messages', flow:true},
   {label:'그룹 활성 유저 (일)', key:'gr_active_users', flow:true},
 ];
-document.getElementById('cards').innerHTML = cards.map(c => {
+document.getElementById('cards').innerHTML = cards.filter(c => HAS_GROUP || !c.key.startsWith('gr_')).map(c => {
   const v = last[c.key], pv = prev[c.key];
   const d = (v==null||pv==null) ? null : v - pv;
   // 유량형 지표(조회수·메시지·활성)는 오늘이 진행 중이라 전일대비가 가짜 급감으로 보임 → '집계중' 표기
@@ -899,7 +913,8 @@ if (hasFlow) {
 bar('views', [{label:'조회수',data:DATA.map(r=>r.ch_views),backgroundColor:'#25876A',borderRadius:0}]);
 line('engage',[L('공유','ch_forwards','#2E84AE'),L('댓글','ch_replies','#1F8A5B')]);
 
-// 06 그룹 — KPI 카드(전일대비) + 추이 + 순증·순감
+// 06 그룹 — KPI 카드(전일대비) + 추이 + 순증·순감 (연결 그룹 있을 때만)
+if (HAS_GROUP) {
 const grCards = [
   {label:'그룹 멤버', key:'gr_members'},
   {label:'메시지 (일)', key:'gr_messages', flow:true},
@@ -928,6 +943,7 @@ new Chart(document.getElementById('grNet'),{type:'bar',
     backgroundColor:grNet.map(v=>v==null?'#E3E7DF':v>=0?'#1F8A5B':'#C8404E'),borderRadius:0}]},
   options:(()=>{const o=clone(baseOpts);o.scales.x.offset=true;return o;})()});
 line('grActivity',[L('메시지','gr_messages','#2E84AE'),L('활성 유저','gr_active_users','#0B3A2C')]);
+}
 
 // ---------- 차트 상세 팝업 (차트 클릭 → 확대 + 기간 전환 + 요약 + 일자별 표) ----------
 (function(){
@@ -1153,6 +1169,18 @@ if (POSTS.length) {
   const chip = document.getElementById('quotaChip');
   if (!chip || !QUOTA || !QUOTA.available) return;
   chip.hidden = false;
+  if (QUOTA.mode === 'deadline') {
+    // 기간형(부스팅 등): 마감일까지 D-day + 마감일 병기. 클릭 팝업 없음.
+    const [y,m,d] = QUOTA.deadline.split('-').map(Number);
+    const kstNow = new Date(Date.now() + 9*3600*1000);              // KST 오늘 (달력일 기준)
+    const today = Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate());
+    const diff = Math.round((Date.UTC(y, m-1, d) - today) / 86400000);
+    const dday = diff > 0 ? `D-${diff}` : diff === 0 ? 'D-DAY' : `종료 (+${-diff}일)`;
+    chip.classList.add('static');
+    chip.title = `${QUOTA.label || '기간'} 마감일 ${QUOTA.deadline}`;
+    chip.innerHTML = `${esc(QUOTA.label || '기간')} <b>${dday}</b> <span class="due">· ${m}/${d} 마감</span>`;
+    return;
+  }
   chip.querySelector('b').textContent = fmt(QUOTA.remaining) + '회';
   chip.addEventListener('click', ()=>{
     document.getElementById('mmTitle').textContent = '게시글 서비스 — 남은횟수';
@@ -1297,6 +1325,7 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
 // ---------- 06 활발한 멤버 (10명씩 페이지네이션) ----------
 (function(){
   const box = document.getElementById('topMembers');
+  if (!box) return;
   if (MEMBERS && MEMBERS.length) {
     box.innerHTML = `<div class="eyebrow" style="margin-bottom:12px;">활발한 멤버 — 발화 수 순 (전체 ${MEMBERS.length}명)</div>
       <div class="table-wrap"><table><thead><tr><th class="l">#  멤버</th><th>발화 수</th></tr></thead><tbody id="tmBody"></tbody></table></div>
@@ -1319,6 +1348,7 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
 (function(){
   const cardsBox = document.getElementById('cobakCards');
   const body     = document.getElementById('cobakPosts');
+  if (!HAS_COBAK || !cardsBox) return;
   if (!COBAK || !COBAK.available) {
     cardsBox.innerHTML = `<div class="empty" style="grid-column:1/-1;"><div class="tag">No cobak data</div>
       <b>코박 활동 데이터 없음</b><br>cobak.py 실행 후 표시됩니다.</div>`;
@@ -1578,32 +1608,85 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
 </html>"""
 
 
-def main():
-    rows = load_summary(SRC)
+PLACEHOLDER = """<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__CHNAME__ · Kangtearoom Data</title><link rel="icon" type="image/png" href="__FAVICON__">
+<style>
+  body { margin:0; font-family:-apple-system,'Pretendard','Noto Sans KR',sans-serif; background:#F3F5F1; color:#0B3A2C; }
+  .rail { background:#0C3F30; color:rgba(255,255,255,.62); font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.18em; text-transform:uppercase; }
+  .rail-in { max-width:1180px; margin:0 auto; padding:9px 24px; display:flex; align-items:center; gap:14px; }
+  .chnav { display:inline-flex; border:1px solid rgba(255,255,255,.28); }
+  .chnav a { font-size:11px; letter-spacing:.04em; text-transform:none; color:rgba(255,255,255,.72); text-decoration:none; padding:4px 11px; }
+  .chnav a + a { border-left:1px solid rgba(255,255,255,.28); }
+  .chnav a.active { color:#0C3F30; background:#14B87D; font-weight:600; }
+  main { max-width:640px; margin:80px auto; padding:0 24px; text-align:center; }
+  .tag { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:#5B6B62; }
+  h1 { font-size:22px; margin:12px 0 10px; }
+  p { color:#5B6B62; line-height:1.7; font-size:14px; }
+</style></head>
+<body>
+  <div class="rail"><div class="rail-in"><span>KANGTEAROOM DATA</span><nav class="chnav">__NAV__</nav></div></div>
+  <main>
+    <div class="tag">Preparing</div>
+    <h1>__CHNAME__ — 데이터 준비 중</h1>
+    <p>__REASON__</p>
+  </main>
+</body></html>"""
+
+
+def nav_html(active_key):
+    """헤더 채널 토글 버튼. 사이트 경로 기준 절대 링크(/, /mirae/)."""
+    parts = []
+    for c in CHANNELS:
+        href = "/" + (c["path"].strip("/") + "/" if c["path"] else "")
+        cls = ' class="active" aria-current="page"' if c["key"] == active_key else ""
+        parts.append(f'<a href="{href}"{cls}>{c["name"]}</a>')
+    return "".join(parts)
+
+
+def build_channel(ch, favicon):
+    key = ch["key"]
+    d = data_dir(key)
+    out = d / "dashboard.html"
+    ch_user = (ch.get("channel") or "").lstrip("@")
+    gr_user = (ch.get("group") or "").lstrip("@")
+    nav = nav_html(key)
+
+    src = d / "daily_summary.csv"
+    rows = load_summary(src) if src.exists() else []
     if not rows:
-        print("데이터가 없습니다:", SRC, file=sys.stderr)
-        sys.exit(1)   # 빈 빌드 차단 — update.sh 게이트가 비정상 종료를 감지
+        reason = ("channels.py 에 채널 @username 을 입력하면 다음 갱신부터 수집이 시작됩니다."
+                  if not ch.get("channel") else
+                  "아직 수집된 데이터가 없습니다. 다음 자동 갱신(30분 주기) 후 표시됩니다.")
+        out.write_text(PLACEHOLDER.replace("__CHNAME__", ch["name"]).replace("__NAV__", nav)
+                       .replace("__FAVICON__", favicon).replace("__REASON__", reason), encoding="utf-8")
+        print(f"[{ch['name']}] 데이터 없음 → 준비 중 페이지 생성 ({out})")
+        return "placeholder"
 
-    posts = load_latest_posts()
-    quota = update_quota(posts)
+    posts = load_latest_posts(d)
+    quota = update_quota(posts, d, ch.get("quota"))
     posts_out = [{k: v for k, v in p.items() if k != "iso"} for p in posts]
-    official = load_json("broadcast_stats.json", {"available": False})
-    members = load_json("group_top_members.json", [])
+    official = load_json(d, "broadcast_stats.json", {"available": False})
+    members = load_json(d, "group_top_members.json", []) if gr_user else []
+    joinleave = load_json(d, "join_leave.json", {"available": False})
+    joinleave_gr = load_json(d, "join_leave_group.json", {"available": False}) if gr_user else {"available": False}
+    cobak = load_json(d, "cobak_stats.json", {"available": False}) if ch.get("cobak") else {"available": False}
 
-    joinleave = load_json("join_leave.json", {"available": False})
-    joinleave_gr = load_json("join_leave_group.json", {"available": False})
-    cobak = load_json("cobak_stats.json", {"available": False})
-
-
-
-    logo = ROOT / "assets" / "kang_logo.png"
-    favicon = ("data:image/png;base64," + base64.b64encode(logo.read_bytes()).decode()) if logo.exists() else ""
+    rail_mid = (f'<a class="chlink" href="https://t.me/{ch_user}" target="_blank" rel="noopener">@{ch_user}</a>'
+                if ch_user else "")
+    if gr_user:
+        rail_mid += f' · <a class="chlink" href="https://t.me/{gr_user}" target="_blank" rel="noopener">@{gr_user}</a>'
 
     html = (TEMPLATE
             .replace("__FAVICON__", favicon)
             .replace("__GENERATED__", datetime.now(KST).strftime("%Y-%m-%d %H:%M"))
-            .replace("__CHUSER__", CH_USER)
-            .replace("__GRUSER__", GR_USER)
+            .replace("__CHNAME__", ch["name"])
+            .replace("__NAV__", nav)
+            .replace("__RAILMID__", rail_mid)
+            .replace("__CHUSER__", ch_user)
+            .replace("__GRUSER__", gr_user)
+            .replace("__HAS_GROUP__", "true" if gr_user else "false")
+            .replace("__HAS_COBAK__", "true" if ch.get("cobak") else "false")
             .replace("__DATA__", json.dumps(rows, ensure_ascii=False))
             .replace("__POSTS__", json.dumps(posts_out, ensure_ascii=False))
             .replace("__QUOTA__", json.dumps(quota, ensure_ascii=False))
@@ -1613,12 +1696,33 @@ def main():
             .replace("__JOINLEAVE_GR__", json.dumps(joinleave_gr, ensure_ascii=False))
             .replace("__COBAK__", json.dumps(cobak, ensure_ascii=False)))
 
-    OUT.write_text(html, encoding="utf-8")
-    print(f"대시보드 생성 완료 → {OUT}")
+    out.write_text(html, encoding="utf-8")
+    print(f"[{ch['name']}] 대시보드 생성 → {out}")
     print(f"  요약 {len(rows)}일 · 포스트 {len(posts)}건 · "
           f"공식통계 {'O' if official.get('available') else 'X'} · "
-          f"멤버 {len(members)}")
-    print(f"열기: open {OUT}")
+          f"멤버 {len(members)} · 쿼터 {quota.get('mode', '-')}")
+    return "ok"
+
+
+def main():
+    migrate_legacy_layout()
+    only = None
+    if len(sys.argv) > 2 and sys.argv[1] == "--only":
+        only = sys.argv[2]
+    logo = ROOT / "assets" / "kang_logo.png"
+    favicon = ("data:image/png;base64," + base64.b64encode(logo.read_bytes()).decode()) if logo.exists() else ""
+
+    results = {}
+    for ch in CHANNELS:
+        if only and ch["key"] != only:
+            continue
+        results[ch["key"]] = build_channel(ch, favicon)
+
+    # 주 채널(첫 번째)에 실제 데이터가 없으면 빌드 실패 — update.sh 게이트가 배포를 막는다.
+    primary = CHANNELS[0]["key"]
+    if results.get(primary, "ok") != "ok":
+        print(f"주 채널({primary}) 데이터가 없습니다 — 빌드 실패", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

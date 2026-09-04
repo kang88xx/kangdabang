@@ -1,7 +1,7 @@
 """코박(cobak.co) '캉다방' 활동 수집기.
 
 cobak.co 커뮤니티에 '캉다방' 닉네임으로 올라오는 게시글을 주기적으로 가져와
-data/cobak_stats.json 에 총게시글·총뷰·총추천·총댓글 + 게시글 목록(하이퍼링크)으로 저장한다.
+data/kang/cobak_stats.json 에 총게시글·총뷰·총추천·총댓글 + 게시글 목록(하이퍼링크)으로 저장한다.
 
 데이터 출처(공개 JSON API, 인증 불필요):
     https://cobak.co/api/v1/users/user-575132/posts?limit=100
@@ -26,7 +26,9 @@ from pathlib import Path
 KST = timezone(timedelta(hours=9))
 
 ROOT = Path(__file__).parent
-OUT = ROOT / "data" / "cobak_stats.json"
+from channels import data_dir, migrate_legacy_layout   # noqa: E402
+migrate_legacy_layout()
+OUT = data_dir("kang") / "cobak_stats.json"       # 코박 '캉다방' 계정 → 캉다방 채널 폴더
 
 # 수집 대상 — '캉다방'(닉네임) cobak 유저. 최초 글 URL에서 확인한 user id.
 NICKNAME = "캉다방"
