@@ -27,7 +27,8 @@ from threading import Lock
 
 ROOT = Path(__file__).parent
 DATA_DIR = ROOT / "data"
-DASHBOARD = DATA_DIR / "kang" / "dashboard.html"   # 로컬 서버는 주 채널(캉다방) 대시보드
+DASHBOARD = DATA_DIR / "kang" / "dashboard.html"   # 존재 확인용(주 채널)
+from channels import CHANNELS   # noqa: E402
 PY = sys.executable                      # server.py 를 띄운 동일 파이썬(venv 권장)
 PORT = int(os.environ.get("PORT", "8765"))
 REFRESH_TIMEOUT = 600                     # 수집+빌드 합산 최대 대기(초)
@@ -78,17 +79,42 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
-        if path in ("/", "/index.html"):
-            if not DASHBOARD.exists():
-                self._send(404, "대시보드가 아직 생성되지 않았습니다. "
-                                "먼저 python build_dashboard.py 를 실행하세요.")
+        # 로컬 검토용 로그인 우회 — 127.0.0.1 전용 서버이므로 마스터로 바로 열어준다.
+        if path == "/api/me":
+            self._send(200, json.dumps({"ok": True, "name": "로컬", "user": "local", "role": "master"}),
+                       "application/json")
+            return
+        if path == "/api/logs":
+            self._send(200, json.dumps({"ok": True, "kvReady": False, "users": [], "events": []}),
+                       "application/json")
+            return
+        # 채널별 페이지: / → kang, /<path>/ → 해당 채널. 월별 유입·이탈 JSON(jl/YYYY-MM.json)도 같이 서빙.
+        for ch in CHANNELS:
+            base = "/" + (ch["path"].strip("/") + "/" if ch["path"] else "")
+            d = DATA_DIR / ch["key"]
+            if path in (base, base + "index.html"):
+                page = d / "dashboard.html"
+                if not page.exists():
+                    self._send(404, "대시보드가 아직 생성되지 않았습니다. "
+                                    "먼저 python build_dashboard.py 를 실행하세요.")
+                    return
+                self._send(200, page.read_bytes())
                 return
-            self._send(200, DASHBOARD.read_bytes())
-        else:
-            self._send(404, "Not found")
+            if path.startswith(base + "jl/") and path.endswith(".json"):
+                f = d / ("join_leave_" + path[len(base) + 3:])
+                if f.exists() and f.parent == d:
+                    self._send(200, f.read_bytes(), "application/json")
+                else:
+                    self._send(404, "Not found")
+                return
+        self._send(404, "Not found")
 
     def do_POST(self):
-        if self.path.split("?", 1)[0] != "/refresh":
+        p = self.path.split("?", 1)[0]
+        if p in ("/api/ping", "/api/logout", "/api/profile"):
+            self._send(200, json.dumps({"ok": True}), "application/json")
+            return
+        if p != "/refresh":
             self._send(404, json.dumps({"ok": False, "error": "Not found"}),
                        "application/json")
             return
