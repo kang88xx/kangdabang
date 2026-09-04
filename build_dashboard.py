@@ -298,6 +298,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   .sidebar-label { margin:0 0 14px; padding-inline:16px; color:var(--grey-600); font-size:13px; font-weight:700;
     letter-spacing:.08em; text-transform:uppercase; }
   .sidebar-nav { display:grid; gap:4px; }
+  main > section.view-off { display:none; }
   .sidebar-nav a { min-height:48px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center;
     border-radius:var(--radius-control); padding-inline:16px; color:var(--grey-700); text-decoration:none;
     font-size:15px; font-weight:500; transition:background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
@@ -1594,60 +1595,55 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE, {months: JOINLE
   show(months[months.length-1]);
 })();
 
-// ---------- 좌측 사이드바: 섹션 목록(건수 배지) · 현재 위치 · 모바일 드로어 ----------
+// ---------- 좌측 사이드바: 영역(뷰) 전환 — 누르면 해당 영역만 표시 · 모바일 드로어 ----------
+// 섹션을 6개 영역으로 묶고, 선택한 영역의 섹션만 보여준다(스크롤 이동 아님). URL 해시(#channel 등)로 유지.
 (function(){
   const nav = document.getElementById('sideNav');
   if (!nav) return;
-  // 섹션 id → 메뉴 라벨 · 배지 숫자(있을 때만)
-  const META = {
-    'sec-overview': {label:'핵심 지표'},
-    'sec-subs':     {label:'구독자 증감', count: () => (JOINLEAVE && JOINLEAVE.available ? (JOINLEAVE.events||[]).length : null)},
-    'sec-reach':    {label:'조회 · 참여'},
-    'sec-posts':    {label:'포스트 성과', count: () => POSTS.length || null},
-    'sec-official': {label:'공식 통계', count: () => (OFFICIAL && OFFICIAL.available ? Object.keys(OFFICIAL.metrics||{}).length : null)},
-    'sec-group':    {label:'그룹 활동', count: () => (MEMBERS && MEMBERS.length) || null},
-    'sec-cobak':    {label:'코박 활동', count: () => (COBAK && COBAK.available && COBAK.totals ? COBAK.totals.posts : null)},
-    'sec-access':   {label:'접속 로그'},
-    'sec-profile':  {label:'내 계정'},
-  };
-  const sections = () => Array.from(document.querySelectorAll('main > section[id]')).filter(s => !s.hidden);
+  const VIEWS = [
+    {id:'overview', label:'개요',   secs:['sec-overview']},
+    {id:'channel',  label:'채널',   secs:['sec-subs','sec-reach','sec-official']},
+    {id:'posts',    label:'포스트', secs:['sec-posts'],  count: () => POSTS.length || null},
+    {id:'group',    label:'그룹',   secs:['sec-group'],  count: () => (MEMBERS && MEMBERS.length) || null},
+    {id:'cobak',    label:'코박',   secs:['sec-cobak'],  count: () => (COBAK && COBAK.available && COBAK.totals ? COBAK.totals.posts : null)},
+    {id:'admin',    label:'관리',   secs:['sec-access','sec-profile']},
+  ];
+  const $ = id => document.getElementById(id);
+  // 존재하고(채널 설정에 따라 제거됨) hidden 아닌 섹션이 하나라도 있는 영역만 메뉴에 노출
+  const available = v => v.secs.some(id => { const el = $(id); return el && !el.hidden; });
   let current = null;
+  function apply(id, push){
+    const v = VIEWS.find(x => x.id === id && available(x)) || VIEWS.find(available);
+    if (!v) return;
+    current = v.id;
+    for (const x of VIEWS) for (const sid of x.secs) { const el = $(sid); if (el) el.classList.toggle('view-off', x !== v); }
+    nav.querySelectorAll('a').forEach(a => { if (a.dataset.view===v.id) a.setAttribute('aria-current','location'); else a.removeAttribute('aria-current'); });
+    if (push) { try { history.replaceState(null, '', '#' + v.id); } catch(e){} window.scrollTo({top:0}); }
+    // 숨겨져 있던 캔버스 크기 재계산(Chart.js는 display:none 상태에선 0px로 그려짐)
+    if (typeof Chart !== 'undefined') requestAnimationFrame(() => { for (const c of Object.values(Chart.instances)) { try { c.resize(); } catch(e){} } });
+  }
   function build(){
-    nav.innerHTML = sections().map(sec => {
-      const m = META[sec.id] || {label: (sec.querySelector('h2')||sec).textContent.trim()};
-      const n = m.count ? m.count() : null;
-      return `<a href="#${sec.id}" data-id="${sec.id}"${sec.id===current?' aria-current="location"':''}>${m.label}${n!=null?`<strong>${fmt(n)}</strong>`:''}</a>`;
+    nav.innerHTML = VIEWS.filter(available).map(v => {
+      const n = v.count ? v.count() : null;
+      return `<a href="#${v.id}" data-view="${v.id}"${v.id===current?' aria-current="location"':''}>${v.label}${n!=null?`<strong>${fmt(n)}</strong>`:''}</a>`;
     }).join('');
   }
-  function setCurrent(id){
-    if (id === current) return;
-    current = id;
-    nav.querySelectorAll('a').forEach(a => { if (a.dataset.id===id) a.setAttribute('aria-current','location'); else a.removeAttribute('aria-current'); });
-  }
   build();
-  // 화면 중앙에 가장 가까운 섹션을 현재 위치로
-  function track(){
-    const mid = window.innerHeight * .35;
-    let best = null, bestD = Infinity;
-    for (const sec of sections()){
-      const r = sec.getBoundingClientRect();
-      const d = (r.top <= mid && r.bottom >= mid) ? 0 : Math.min(Math.abs(r.top-mid), Math.abs(r.bottom-mid));
-      if (d < bestD){ bestD = d; best = sec.id; }
-    }
-    if (best) setCurrent(best);
-  }
-  let raf = null;
-  window.addEventListener('scroll', () => { if (raf) return; raf = requestAnimationFrame(() => { raf=null; track(); }); }, {passive:true});
-  window.addEventListener('resize', track);
-  track();
-  // 접속 로그/내 계정처럼 로그인 후 나타나는 섹션 반영
-  new MutationObserver(() => { build(); track(); }).observe(document.querySelector('main'), {attributes:true, subtree:true, attributeFilter:['hidden']});
+  apply((location.hash || '').replace('#','') || 'overview', false);
+  window.addEventListener('hashchange', () => apply((location.hash || '').replace('#',''), false));
+  // 로그인 후 나타나는 접속 로그/내 계정 섹션 → '관리' 메뉴 자동 노출
+  new MutationObserver(() => { build(); if (!VIEWS.find(x => x.id===current && available(x))) apply('overview', false); })
+    .observe(document.querySelector('main'), {attributes:true, subtree:true, attributeFilter:['hidden']});
   // 모바일 드로어
   const btn = document.getElementById('menuBtn'), back = document.getElementById('sideBack');
   const open = v => { document.body.classList.toggle('nav-open', v); back.hidden = !v; if (btn) btn.setAttribute('aria-expanded', String(v)); };
   if (btn) btn.addEventListener('click', () => open(!document.body.classList.contains('nav-open')));
   back.addEventListener('click', () => open(false));
-  nav.addEventListener('click', e => { const a = e.target.closest('a'); if (!a) return; setCurrent(a.dataset.id); if (window.innerWidth < 1024) open(false); });
+  nav.addEventListener('click', e => {
+    const a = e.target.closest('a'); if (!a) return;
+    e.preventDefault(); apply(a.dataset.view, true);
+    if (window.innerWidth < 1024) open(false);
+  });
   document.addEventListener('keydown', e => { if (e.key==='Escape' && document.body.classList.contains('nav-open')) open(false); });
 })();
 
