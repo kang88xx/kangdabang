@@ -644,12 +644,14 @@ TEMPLATE = r"""<!DOCTYPE html>
         <a class="dtag cobak" id="cobakTag" href="https://cobak.co/" target="_blank" rel="noopener">cobak.co</a>
       </div>
       <div class="cards" id="cobakCards" style="margin-bottom:24px;"></div>
-      <div class="eyebrow" style="margin-bottom:12px;">게시글 목록 — 최신순 (제목 클릭 시 코박에서 열림)</div>
+      <div class="tabs post-months" id="cobakMonths"></div>
+      <div class="eyebrow" style="margin-bottom:12px;">게시글 목록 — <span id="cobakMonthLabel">선택한 달</span> 최신순 · 5개씩 (제목 클릭 시 코박에서 열림)</div>
       <div class="table-wrap">
         <table><thead><tr>
           <th class="l">게시물</th><th>날짜</th><th>시각</th><th>조회수</th><th>추천</th><th>댓글</th>
         </tr></thead><tbody id="cobakPosts"></tbody></table>
       </div>
+      <div class="pager" id="cobakPager"></div>
     </section>
 
     <!-- 08 접속 로그 (마스터 전용) -->
@@ -658,12 +660,13 @@ TEMPLATE = r"""<!DOCTYPE html>
         <div><div class="eyebrow">Admin · Access</div><h2>접속 로그 — 사용 현황</h2></div>
         <button type="button" id="logRefresh" class="dtag" style="background:var(--ink-900);border:none;cursor:pointer;">새로고침</button>
       </div>
-      <div class="eyebrow" style="margin-bottom:12px;">계정 선택 — 탭을 누르면 해당 계정만 표시 (계정은 자동 생성)</div>
+      <div class="cards cards-tight" id="accessCards" style="margin-bottom:20px;"></div>
+      <div class="eyebrow" style="margin-bottom:12px;">일자별 접속 횟수 — 계정 탭을 누르면 해당 계정만 (로그인 = 접속, 사용 = 열어둔 동안 5분마다 1회)</div>
       <div class="tabs" id="accessTabs"></div>
       <div id="accessSummary" style="font-family:'Geist Mono',monospace;font-size:13px;letter-spacing:.01em;color:var(--ink-500);margin:2px 0 16px;min-height:18px;"></div>
       <div class="table-wrap">
         <table><thead><tr>
-          <th class="l">계정</th><th>유형</th><th>날짜</th><th>시각</th>
+          <th class="l">날짜</th><th class="l">계정</th><th>로그인</th><th>사용</th><th>마지막 활동</th>
         </tr></thead><tbody id="accessLog"></tbody></table>
       </div>
       <div class="pager" id="accessPager"></div>
@@ -1228,7 +1231,9 @@ if (POSTS.length) {
       paginate(allBody, pager, items, 10, listRow);
     };
     sel.onchange = () => showList(sel.value);
-    showList('__week');
+    const initial = byDate[todayIso] ? todayIso : (days[0] || '__week');
+    sel.value = initial;
+    showList(initial);
   }
   function showMonth(m){
     curMonth = m;
@@ -1495,9 +1500,20 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE, {months: JOINLE
     {label:'총 댓글',   val:t.comments},
   ].map(c=>`<div class="card"><div class="label">${c.label}</div><div class="value">${fmt(c.val||0)}</div></div>`).join('');
 
-  const posts = COBAK.posts || [];
-  if (posts.length) {
-    body.innerHTML = posts.map(p=>`
+  const posts = (COBAK.posts || []).filter(p => p.date);
+  const monthsEl = document.getElementById('cobakMonths');
+  const pager    = document.getElementById('cobakPager');
+  const label    = document.getElementById('cobakMonthLabel');
+  if (!posts.length) {
+    body.innerHTML = `<tr><td class="l" colspan="6" style="text-align:center;color:var(--ink-300);padding:24px;">게시글 없음</td></tr>`;
+    return;
+  }
+  // 월 탭(오래된 달 → 최근 달) · 기본 = 최근 달 · 5개씩 페이지
+  const byMonth = {};
+  for (const p of posts) (byMonth[p.date.slice(0,7)] = byMonth[p.date.slice(0,7)] || []).push(p);
+  const months = Object.keys(byMonth).sort();
+  const latestYear = months[months.length-1].slice(0,4);
+  const row = p => `
       <tr>
         <td class="l"><a class="post" href="${p.url}" target="_blank" rel="noopener">${esc(p.title)}</a></td>
         <td>${(p.date||'').slice(5)}</td>
@@ -1505,10 +1521,17 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE, {months: JOINLE
         <td>${fmt(p.views)}</td>
         <td>${fmt(p.recommend)}</td>
         <td>${fmt(p.comments)}</td>
-      </tr>`).join('');
-  } else {
-    body.innerHTML = `<tr><td class="l" colspan="6" style="text-align:center;color:var(--ink-300);padding:24px;">게시글 없음</td></tr>`;
+      </tr>`;
+  function show(m){
+    monthsEl.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.m === m));
+    label.textContent = `${m.slice(0,4)}년 ${Number(m.slice(5))}월`;
+    const items = byMonth[m].slice().sort((a,b)=> ((b.date+(b.time||'')).localeCompare(a.date+(a.time||''))));
+    paginate(body, pager, items, 5, row);
   }
+  monthsEl.innerHTML = months.map(m =>
+    `<button type="button" class="tab" data-m="${m}">${Number(m.slice(5))}월<span class="sub">${m.slice(0,4)!==latestYear ? m.slice(0,4)+' · ' : ''}${byMonth[m].length}건</span></button>`).join('');
+  monthsEl.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => show(b.dataset.m)));
+  show(months[months.length-1]);
 })();
 
 // ---------- 인증 게이트 + 접속 로그(마스터) ----------
@@ -1644,26 +1667,37 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE, {months: JOINLE
 
     if (d.kvReady === false){
       tabsBox.innerHTML=''; summary.innerHTML='';
-      tbody.innerHTML = `<tr><td class="l" colspan="4" style="text-align:center;color:var(--ink-300);padding:24px;">로그 저장소(KV) 미연동 — 연결 후 표시됩니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td class="l" colspan="5" style="text-align:center;color:var(--ink-300);padding:24px;">로그 저장소(KV) 미연동 — 연결 후 표시됩니다.</td></tr>`;
       pager.innerHTML=''; foot.textContent=''; return;
     }
 
     const users = d.users || [];      // 모든 계정(0건 포함), 접속 횟수 순
     const evs   = d.events || [];
+    const daily = d.daily || [];      // 계정×날짜(KST) 집계, 최신일 먼저
     const total = d.total || evs.length;
     if (!users.some(u=>u.user===logFilter)) logFilter = '__all';   // 사라진 계정 선택 방어
+
+    // 계정 카드: 최근 접속 시각 한 줄 + 총 로그인 수
+    const cards = document.getElementById('accessCards');
+    if (cards) cards.innerHTML = users.map(u => `
+      <div class="card">
+        <div class="label">${esc(u.user)}${u.role==='master'?' · 마스터':''}</div>
+        <div class="value" style="font-size:18px;">${u.last ? `${kstDate(u.last)} ${kstTime(u.last)}` : '—'}</div>
+        <div class="delta flat"><span style="color:var(--ink-300);font-weight:400;">${u.last ? '최근 접속' : '접속 기록 없음'} · 로그인 ${fmt(u.logins)}회</span></div>
+      </div>`).join('');
 
     // 탭: 전체 + 계정별 (계정 추가 시 자동 생성)
     tabsBox.innerHTML = [`<button class="tab" data-u="__all">전체 ${fmt(total)}</button>`]
       .concat(users.map(u=>`<button class="tab" data-u="${esc(u.user)}">${esc(u.user)}${u.role==='master'?' · 마스터':''} ${fmt(u.total)}</button>`))
       .join('');
 
-    const rowFn = ev => `
+    const rowFn = r => `
       <tr>
-        <td class="l">${esc(ev.u)}</td>
-        <td><span class="ttag ${ev.type==='login'?'login':'ping'}">${ev.type==='login'?'로그인':'사용'}</span></td>
-        <td>${kstDate(ev.ts)}</td>
-        <td>${kstTime(ev.ts)}</td>
+        <td class="l">${r.date}</td>
+        <td class="l">${esc(r.user)}</td>
+        <td>${fmt(r.logins)}회</td>
+        <td>${fmt(r.pings)}회</td>
+        <td>${r.last ? kstTime(r.last) : '—'}</td>
       </tr>`;
 
     function apply(user){
@@ -1677,13 +1711,13 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE, {months: JOINLE
           ? `<b style="color:var(--forest-700);">${esc(u.user)}</b>${u.role==='master'?' · 마스터':''} · 총 ${fmt(u.total)} · 로그인 ${fmt(u.logins)} · 사용 ${fmt(u.pings)} · 최근 ${kstDate(u.last)} ${kstTime(u.last)}`
           : `<b style="color:var(--forest-700);">${esc(user)}</b> · 접속 기록 없음`;
       }
-      const items = user==='__all' ? evs : evs.filter(e=>e.u===user);
-      if (items.length) paginate(tbody, pager, items, 12, rowFn);
-      else { tbody.innerHTML = `<tr><td class="l" colspan="4" style="text-align:center;color:var(--ink-300);padding:24px;">기록 없음</td></tr>`; pager.innerHTML=''; }
+      const items = user==='__all' ? daily : daily.filter(r=>r.user===user);
+      if (items.length) paginate(tbody, pager, items, 10, rowFn);
+      else { tbody.innerHTML = `<tr><td class="l" colspan="5" style="text-align:center;color:var(--ink-300);padding:24px;">기록 없음</td></tr>`; pager.innerHTML=''; }
     }
     tabsBox.onclick = ev => { const t = ev.target.closest('.tab'); if(!t) return; apply(t.dataset.u); };
     apply(logFilter);
-    foot.textContent = `총 ${fmt(total)}건 · 표시 ${evs.length}건 · 60초마다 자동 갱신`;
+    foot.textContent = `총 이벤트 ${fmt(total)}건 · 일자별 ${fmt(daily.length)}행 · 60초마다 자동 갱신`;
   }
   document.getElementById('logRefresh').addEventListener('click', loadLogs);
 })();

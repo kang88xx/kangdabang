@@ -85,8 +85,19 @@ class Handler(BaseHTTPRequestHandler):
                        "application/json")
             return
         if path == "/api/logs":
-            self._send(200, json.dumps({"ok": True, "kvReady": False, "users": [], "events": []}),
-                       "application/json")
+            # 로컬 검토용 샘플(실제 로그는 Vercel KV에만 있음) — 화면 레이아웃 확인 목적
+            import time
+            now = int(time.time() * 1000); day = 86400000
+            self._send(200, json.dumps({"ok": True, "kvReady": True, "total": 41,
+                "users": [{"user": "마스터", "slot": "kang", "role": "master", "total": 30, "logins": 4, "pings": 26, "first": now - 3*day, "last": now - 600000},
+                          {"user": "A계정", "slot": "A", "role": "user", "total": 11, "logins": 3, "pings": 8, "first": now - 2*day, "last": now - day},
+                          {"user": "B계정", "slot": "B", "role": "user", "total": 0, "logins": 0, "pings": 0, "first": None, "last": None}],
+                "daily": [{"user": "마스터", "date": "2026-09-04", "logins": 2, "pings": 14, "last": now - 600000},
+                          {"user": "A계정", "date": "2026-09-03", "logins": 2, "pings": 5, "last": now - day},
+                          {"user": "마스터", "date": "2026-09-03", "logins": 1, "pings": 8, "last": now - day - 3600000},
+                          {"user": "A계정", "date": "2026-09-02", "logins": 1, "pings": 3, "last": now - 2*day},
+                          {"user": "마스터", "date": "2026-09-02", "logins": 1, "pings": 4, "last": now - 2*day - 7200000}],
+                "events": []}), "application/json")
             return
         # 채널별 페이지: / → kang, /<path>/ → 해당 채널. 월별 유입·이탈 JSON(jl/YYYY-MM.json)도 같이 서빙.
         for ch in CHANNELS:

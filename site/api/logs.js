@@ -46,6 +46,21 @@ module.exports = async (req, res) => {
   }
   const users = Object.values(byUser).sort((x, y) => y.total - x.total);
 
+  // 일자별(KST) 집계: 계정×날짜 → 로그인/사용 횟수. 전체 이벤트 기준(타임라인 800건 제한과 무관).
+  const kstDay = (ts) => new Date(ts + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const dayMap = {};
+  for (const ev of events) {
+    if (!ev || !ev.u || !ev.ts) continue;
+    const date = kstDay(ev.ts);
+    const key = ev.u + "|" + date;
+    let row = dayMap[key];
+    if (!row) row = dayMap[key] = { slot: ev.u, user: dn(ev.u), date, logins: 0, pings: 0, last: 0 };
+    if (ev.type === "login") row.logins++;
+    else row.pings++;
+    if (ev.ts > row.last) row.last = ev.ts;
+  }
+  const daily = Object.values(dayMap).sort((x, y) => (y.date < x.date ? -1 : y.date > x.date ? 1 : y.last - x.last));
+
   // 상세 타임라인(최신순, 최대 800건) — u 를 현재 이름으로 치환.
   const timeline = events
     .slice()
@@ -53,5 +68,5 @@ module.exports = async (req, res) => {
     .slice(0, 800)
     .map((ev) => ({ u: dn(ev.u), r: ev.r, type: ev.type, ts: ev.ts }));
 
-  return res.status(200).json({ ok: true, kvReady: true, total: events.length, users, events: timeline });
+  return res.status(200).json({ ok: true, kvReady: true, total: events.length, users, daily, events: timeline });
 };
