@@ -15,8 +15,10 @@ from config import API_ID, API_HASH
 from channels import CHANNELS, PRIMARY, data_dir, migrate_legacy_layout
 from tg_graphs import load_graph, parse_graph, by_name
 
-POST_WINDOW = 150          # 포스트 표/공유처 분석에 사용할 최근 게시물 수
+POST_WINDOW = 2000         # 매 수집마다 조회수를 갱신할 최근 게시물 수 (주간 보기용 누적 저장소와 동일 상한)
+POST_STORE_MAX = 2000      # posts_store.json 에 보관할 게시물 수 (id 최신순, 초과분 삭제)
 FWD_TOP_N = 40             # 공유처를 조회할 상위(공유수) 포스트 수
+JL_HISTORY_MAX = 1000      # 채널 유입·이탈 명단 누적 상한 (텔레그램 admin log 는 48시간만 보관되므로 우리가 누적)
 
 
 async def collect_channel(client, username, since):
@@ -168,10 +170,14 @@ def _disp_name(u):
             or (("@" + u.username) if getattr(u, "username", None) else f"user {getattr(u, 'id', '?')}"))
 
 
-async def collect_join_leave(client, entity, limit=500):
+async def collect_join_leave(client, entity, out_dir, limit=500, history_limit=JL_HISTORY_MAX):
     """admin log에서 '누가' 가입/탈퇴했는지 수집. 관리자 권한 필요.
     채널은 가입/탈퇴 이벤트가 풍부; 그룹은 공개링크 가입이 로그에 안 남을 수 있음.
-    호출 불가 시 available=False."""
+    텔레그램은 admin log 를 약 48시간만 보관하므로, 매 수집분을 기존 join_leave.json 과
+    합쳐(같은 사람·시각·종류 중복 제거) 최신 history_limit 건까지 누적한다.
+    호출 불가 시: 기존 누적분이 있으면 그대로 유지(stale_reason 표시), 없으면 available=False."""
+    existing = _load_json(out_dir, "join_leave.json", {}) or {}
+    old = existing.get("events", []) if isinstance(existing, dict) and existing.get("available") else []
     events = []
     try:
         async for e in client.iter_admin_log(entity, join=True, leave=True,
@@ -189,8 +195,20 @@ async def collect_join_leave(client, entity, limit=500):
                 "id": getattr(u, "id", None),
             })
     except Exception as ex:
-        return {"available": False, "reason": f"{type(ex).__name__}: {ex}"}
-    return {"available": True, "events": events}
+        reason = f"{type(ex).__name__}: {ex}"
+        if old:
+            return {"available": True, "events": old, "accumulated": True, "stale_reason": reason}
+        return {"available": False, "reason": reason}
+    seen, merged = set(), []
+    for e in events + old:
+        key = (e.get("id"), e.get("date"), e.get("kind"))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(e)
+    merged.sort(key=lambda e: e.get("date") or "", reverse=True)
+    return {"available": True, "events": merged[:history_limit], "accumulated": True,
+            "new_events": len(events)}
 
 def write_json(out_dir, name, obj):
     (out_dir / name).write_text(json.dumps(obj, ensure_ascii=False, indent=2),
@@ -286,13 +304,14 @@ async def collect_one(client, ch, now_utc, since, today):
     if ch_joined is not None or ch_left is not None:
         print(f"오늘 유입 : 들어옴 {ch_joined or 0} · 나감 {ch_left or 0}")
 
-    joinleave = await collect_join_leave(client, ent)
+    joinleave = await collect_join_leave(client, ent, out)
     write_json(out, "join_leave.json", joinleave)
     if joinleave.get("available"):
         ev = joinleave["events"]
         jn = sum(1 for e in ev if e["kind"] == "join")
         lv = sum(1 for e in ev if e["kind"] == "left")
-        print(f"유입/이탈 : 유입 {jn} · 이탈 {lv} (admin log {len(ev)}건)")
+        print(f"유입/이탈 : 유입 {jn} · 이탈 {lv} (누적 {len(ev)}건 · 이번 admin log {joinleave.get('new_events', 0)}건"
+              + (f" · 이번 조회 실패: {joinleave['stale_reason']}" if joinleave.get('stale_reason') else "") + ")")
     else:
         print(f"유입/이탈 : 미수집 — {joinleave.get('reason', '')}")
 
@@ -320,7 +339,17 @@ async def collect_one(client, ch, now_utc, since, today):
         write_json(out, "group_top_members.json", gr["top_members"])
         print(f"활발 멤버 : {len(gr['top_members'])}명")
 
-    # 포스트 CSV (대시보드 표/공유처 매칭용)
+    # 게시물 누적 저장소 — 이번에 읽은 최근 POST_WINDOW개는 최신 조회수로 덮어쓰고,
+    # 창에서 밀려난 옛 글은 마지막 값 그대로 보존. id 최신순 POST_STORE_MAX 건까지.
+    store = _load_json(out, "posts_store.json", {}) or {}
+    for p in posts:
+        store[str(p["id"])] = p
+    keep = sorted(store, key=lambda k: -int(k))[:POST_STORE_MAX]
+    store = {k: store[k] for k in keep}
+    write_json(out, "posts_store.json", store)
+    print(f"게시물 누적 → posts_store.json ({len(store)}건)")
+
+    # 포스트 CSV (오늘 수집분 · update.sh 빈데이터 게이트 + 저장소 없을 때 폴백)
     posts_csv = out / f"channel_posts_{today}.csv"
     with posts_csv.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["date", "id", "views", "forwards", "replies", "text"])

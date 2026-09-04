@@ -46,13 +46,24 @@ def load_summary(path):
 
 
 def load_latest_posts(DATA_DIR):
-    """가장 최근 channel_posts_*.csv 를 읽어 포스트 리스트 반환 (조회수>0 만)."""
-    files = sorted(glob.glob(str(DATA_DIR / "channel_posts_*.csv")))
-    if not files:
-        return []
+    """게시물 리스트 반환 (조회수>0 만). posts_store.json(누적, 최대 2000건)이 있으면 그것을,
+    없으면 가장 최근 channel_posts_*.csv 를 읽는다."""
+    store = DATA_DIR / "posts_store.json"
+    rows = []
+    if store.exists():
+        try:
+            rows = list(json.loads(store.read_text(encoding="utf-8")).values())
+        except Exception:
+            rows = []
+    if not rows:
+        files = sorted(glob.glob(str(DATA_DIR / "channel_posts_*.csv")))
+        if not files:
+            return []
+        with open(files[-1], encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
     posts = []
-    with open(files[-1], encoding="utf-8") as f:
-        for r in csv.DictReader(f):
+    if True:
+        for r in rows:
             views = int(r.get("views") or 0)
             if views <= 0:                       # 광고/서비스 메시지 제외
                 continue
@@ -74,6 +85,7 @@ def load_latest_posts(DATA_DIR):
                 "replies": int(r.get("replies") or 0),
                 "text": (r.get("text") or "").replace("**", "").strip()[:70] or "(미리보기 없음)",
             })
+    posts.sort(key=lambda p: -p["id"])
     return posts
 
 
@@ -437,6 +449,10 @@ TEMPLATE = r"""<!DOCTYPE html>
     background:var(--white); color:var(--ink-500); cursor:pointer; transition:background .12s,color .12s,border-color .12s; }
   .tab:hover { border-color:var(--forest-300); }
   .tab.active { background:var(--forest-900); color:#fff; border-color:var(--forest-900); }
+  .tab .sub { opacity:.6; margin-left:6px; font-size:11px; }
+  .post-months { margin-bottom:8px; }
+  .post-months .tab { padding:6px 12px; }
+  .post-weeks { margin-bottom:18px; }
   .jl-tag { display:inline-block; font-family:'Geist Mono',monospace; font-size:11px; padding:2px 8px; font-weight:600; }
   .jl-tag.join { color:var(--positive); border:1px solid #BFE0CF; }
   .jl-tag.left { color:var(--negative); border:1px solid #F0C9CD; }
@@ -565,14 +581,16 @@ TEMPLATE = r"""<!DOCTYPE html>
         <div><div class="eyebrow">Channel · Posts</div><h2>채널 — 포스트별 성과</h2></div>
         <span class="dtag ch">@__CHUSER__</span>
       </div>
-      <div class="eyebrow" style="margin-bottom:12px;">TOP 게시물 — 조회수 순 (제목 클릭 시 텔레그램에서 열림)</div>
+      <div class="tabs post-months" id="postMonths"></div>
+      <div class="tabs post-weeks" id="postWeeks"></div>
+      <div class="eyebrow" style="margin-bottom:12px;">TOP 게시물 — <span id="topWeekLabel">선택한 주</span> 조회수 순 (제목 클릭 시 텔레그램에서 열림)</div>
       <div class="table-wrap" style="margin-bottom:28px;">
         <table><thead><tr>
           <th class="l">#  게시물</th><th>날짜</th><th>조회수</th><th>공유</th><th>댓글</th>
         </tr></thead><tbody id="topPosts"></tbody></table>
       </div>
       <div class="eyebrow" style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <span>일별 게시물 — 날짜별 보기</span>
+        <span>게시물 목록 — <span id="listWeekLabel">선택한 주</span></span>
         <select id="postDate" class="datesel"></select>
         <button type="button" id="quotaChip" class="quota-chip" title="클릭하면 일자별 사용 내역" hidden>남은횟수: <b>—</b></button>
       </div>
@@ -1120,42 +1138,106 @@ line('grActivity',[L('메시지','gr_messages','#2E84AE'),L('활성 유저','gr_
   });
 })();
 
-// ---------- 04 포스트 표 (하이퍼링크) ----------
+// ---------- 04 포스트 표 — 월 → 주차 탭으로 주 단위 보기 ----------
+// 주 = 월~일(데이터 일 버킷 기준). 주의 소속 월·주차는 그 주 '목요일'이 속한 달 기준(ISO 관례):
+//   8/31(월)~9/6(일) 은 목요일 9/3 → "9월 1주차". 주차 = ceil(목요일 날짜 / 7).
+// 초기 화면은 오늘이 속한 주. 게시물이 없는 주는 탭에 안 나오되 이번 주는 항상 표시.
 const link = id => `https://t.me/${CH_USER}/${id}`;
 
 if (POSTS.length) {
-  // TOP 게시물 — 조회수 순 (게시 날짜 포함)
-  const top = [...POSTS].sort((a,b)=>b.views-a.views).slice(0,10);
-  document.getElementById('topPosts').innerHTML = top.map((p,i)=>`
+  const DAY = 86400000;
+  const toTs = d => { const [y,m,dd] = d.split('-').map(Number); return Date.UTC(y, m-1, dd); };
+  const isoOf = t => new Date(t).toISOString().slice(0,10);
+  const md = t => { const x = new Date(t); return `${x.getUTCMonth()+1}/${x.getUTCDate()}`; };
+  const mondayOf = d => { const t = toTs(d); return t - ((new Date(t).getUTCDay() + 6) % 7) * DAY; };
+
+  const weeks = {};                                    // monTs → 주 객체
+  const week = d => {
+    const mon = mondayOf(d);
+    if (!weeks[mon]) {
+      const thu = new Date(mon + 3*DAY);
+      weeks[mon] = { mon, sun: mon + 6*DAY, posts: [],
+        month: isoOf(thu.getTime()).slice(0,7), idx: Math.ceil(thu.getUTCDate()/7) };
+    }
+    return weeks[mon];
+  };
+  for (const p of POSTS) week(p.date).posts.push(p);
+  const todayIso = (typeof last !== 'undefined' && last && last.date) ? last.date : new Date().toISOString().slice(0,10);
+  const curWeek = week(todayIso);                      // 이번 주는 게시물 0건이어도 존재
+
+  const byMonth = {};
+  for (const w of Object.values(weeks)) (byMonth[w.month] = byMonth[w.month] || []).push(w);
+  const months = Object.keys(byMonth).sort((a,b)=>b.localeCompare(a));   // 최신 월 먼저
+  for (const m of months) byMonth[m].sort((a,b)=>b.mon-a.mon);             // 최신 주 먼저
+
+  const monthsEl = document.getElementById('postMonths');
+  const weeksEl  = document.getElementById('postWeeks');
+  const topBody  = document.getElementById('topPosts');
+  const allBody  = document.getElementById('allPosts');
+  const pager    = document.getElementById('allPostsPager');
+  const sel      = document.getElementById('postDate');
+  const wLabel = w => `${Number(w.month.slice(5))}월 ${w.idx}주차`;
+  const wRange = w => `${md(w.mon)}~${md(w.sun)}`;
+
+  const topRow = (p,i) => `
     <tr>
       <td class="l"><span class="rank ${i===0?'t1':i===1?'t2':''}">${i+1}</span>
         <a class="post" href="${link(p.id)}" target="_blank" rel="noopener">${esc(p.text)}</a></td>
       <td>${p.date.slice(5)}</td>
       <td>${fmt(p.views)}</td>
       <td>${fmt(p.forwards)}</td><td>${fmt(p.replies)}</td>
-    </tr>`).join('');
-
-  // 일별 게시물 — 날짜 선택 → 해당일 게시물만 (시간 역순)
-  const rowHtml = p => `
+    </tr>`;
+  const listRow = p => `
     <tr>
       <td class="l"><a class="post" href="${link(p.id)}" target="_blank" rel="noopener">${esc(p.text)}</a></td>
-      <td>${p.time}</td>
+      <td style="white-space:nowrap;">${p.date.slice(5)} ${p.time}</td>
       <td>${fmt(p.views)}</td>
       <td>${fmt(p.forwards)}</td><td>${fmt(p.replies)}</td>
     </tr>`;
-  const allBody = document.getElementById('allPosts');
-  const pager   = document.getElementById('allPostsPager');
-  const sel     = document.getElementById('postDate');
-  const byDate = {};
-  for (const p of POSTS) (byDate[p.date] = byDate[p.date] || []).push(p);
-  const days = Object.keys(byDate).sort((a,b)=>b.localeCompare(a));   // 최신일 먼저
-  sel.innerHTML = days.map(d=>`<option value="${d}">${d.slice(5)} · ${byDate[d].length}건</option>`).join('');
-  function show(d){
-    const items = (byDate[d]||[]).slice().sort((a,b)=>(b.time||'').localeCompare(a.time||''));
-    paginate(allBody, pager, items, 10, rowHtml);
+  const emptyRow = msg => `<tr><td class="l" colspan="5" style="text-align:center;color:var(--ink-300);padding:24px;">${msg}</td></tr>`;
+
+  let curMonth = curWeek.month, cur = curWeek;
+
+  function showWeek(w){
+    cur = w;
+    weeksEl.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', Number(b.dataset.mon) === w.mon));
+    document.getElementById('topWeekLabel').textContent = `${wLabel(w)} (${wRange(w)})`;
+    document.getElementById('listWeekLabel').textContent = `${wLabel(w)} (${wRange(w)})`;
+    const posts = w.posts.slice();
+    topBody.innerHTML = posts.length
+      ? posts.sort((a,b)=>b.views-a.views).slice(0,10).map(topRow).join('')
+      : emptyRow(w === curWeek ? '이번 주에 올라온 게시물이 아직 없습니다.' : '이 주에는 게시물이 없습니다.');
+    // 날짜 선택: 주 전체 + 게시물 있는 날짜(최신 먼저)
+    const byDate = {};
+    for (const p of w.posts) (byDate[p.date] = byDate[p.date] || []).push(p);
+    const days = Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
+    sel.innerHTML = `<option value="__week">주 전체 · ${w.posts.length}건</option>`
+      + days.map(d=>`<option value="${d}">${d.slice(5)} · ${byDate[d].length}건</option>`).join('');
+    const showList = d => {
+      const items = (d === '__week' ? w.posts : (byDate[d]||[])).slice()
+        .sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time));
+      if (!items.length){ allBody.innerHTML = emptyRow('게시물 없음'); pager.innerHTML=''; return; }
+      paginate(allBody, pager, items, 10, listRow);
+    };
+    sel.onchange = () => showList(sel.value);
+    showList('__week');
   }
-  sel.addEventListener('change', ()=> show(sel.value));
-  show(days[0]);
+  function showMonth(m){
+    curMonth = m;
+    monthsEl.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.m === m));
+    weeksEl.innerHTML = byMonth[m].map(w =>
+      `<button type="button" class="tab" data-mon="${w.mon}">${wLabel(w)}<span class="sub">${wRange(w)} · ${w.posts.length}건</span></button>`).join('');
+    weeksEl.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => showWeek(weeks[Number(b.dataset.mon)])));
+  }
+  monthsEl.innerHTML = months.map(m => {
+    const n = byMonth[m].reduce((a,w)=>a+w.posts.length, 0);
+    return `<button type="button" class="tab" data-m="${m}">${m.slice(0,4)}.${m.slice(5)}<span class="sub">${n}건</span></button>`;
+  }).join('');
+  monthsEl.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+    showMonth(b.dataset.m); showWeek(byMonth[b.dataset.m][0]);
+  }));
+  showMonth(curMonth);
+  showWeek(curWeek);
 } else {
   const empty = `<tr><td class="l" colspan="5" style="text-align:center;color:var(--ink-300);padding:24px;">포스트 데이터 없음 — collect.py 실행 후 표시됩니다.</td></tr>`;
   document.getElementById('topPosts').innerHTML = empty;
