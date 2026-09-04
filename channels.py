@@ -34,8 +34,8 @@ CHANNELS = [
     },
     {
         "key": "mirae",
-        "name": "미래전략식",
-        "channel": None,          # TODO: @username 입력 시 수집 시작
+        "name": "미래전략실",
+        "channel": "@coin369369",
         "group": None,            # 그룹 세션 보류
         "path": "mirae",
         "cobak": False,
