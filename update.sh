@@ -66,6 +66,9 @@ echo $$ > "$LOCK"; trap 'rm -f "$LOCK"' EXIT
     dest="site/${subdir:+$subdir/}index.html"
     mkdir -p "$(dirname "$dest")"
     if [ -s "data/$key/dashboard.html" ]; then cp "data/$key/dashboard.html" "$dest"; else echo "(경고) data/$key/dashboard.html 없음 — $dest 유지"; fi
+    # 유입·이탈 월별 누적 JSON → site/<path>/jl/YYYY-MM.json (페이지에서 월 탭 클릭 시 fetch)
+    mkdir -p "site/${subdir:+$subdir/}jl"
+    for f in data/$key/join_leave_20*.json(N); do cp "$f" "site/${subdir:+$subdir/}jl/${${f##*/join_leave_}%.json}.json"; done
   done
   echo "----- $(date '+%Y-%m-%d %H:%M:%S') 빌드 완료, Vercel 배포 시작 -----"
   if ! ( cd site && vercel deploy --prod --yes ); then

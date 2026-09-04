@@ -389,8 +389,11 @@ TEMPLATE = r"""<!DOCTYPE html>
   .cd-tools, .stat-strip, .cd-chart { flex-shrink:0; }
   .cd-chart { height:340px; padding:18px 22px 4px; }
   .cd-chart canvas { max-height:320px; }
-  #chartModal .modal-body { flex:1 1 auto; min-height:120px;
+  /* 팝업 전체(차트+표)가 한 덩어리로 스크롤 — 표만 따로 스크롤되지 않게 */
+  #chartModal .modal { overflow-y:auto; }
+  #chartModal .modal-body { flex:none; overflow:visible; min-height:120px;
     margin:8px 22px 20px; border-top:1px solid var(--line-soft); }
+  #chartModal .modal-body thead th { top:0; }
 
   /* 차트 상세 팝업 — 표 크게 보기 (차트·요약 접고 일자별 표만 크게) */
   .tbl-toggle { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.08em;
@@ -453,6 +456,8 @@ TEMPLATE = r"""<!DOCTYPE html>
   .post-months { margin-bottom:8px; }
   .post-months .tab { padding:6px 12px; }
   .post-weeks { margin-bottom:18px; }
+  .jl-months { margin-bottom:8px; }
+  .jl-months .tab { padding:6px 12px; }
   .jl-tag { display:inline-block; font-family:'Geist Mono',monospace; font-size:11px; padding:2px 8px; font-weight:600; }
   .jl-tag.join { color:var(--positive); border:1px solid #BFE0CF; }
   .jl-tag.left { color:var(--negative); border:1px solid #F0C9CD; }
@@ -1167,8 +1172,11 @@ if (POSTS.length) {
 
   const byMonth = {};
   for (const w of Object.values(weeks)) (byMonth[w.month] = byMonth[w.month] || []).push(w);
-  const months = Object.keys(byMonth).sort((a,b)=>b.localeCompare(a));   // 최신 월 먼저
-  for (const m of months) byMonth[m].sort((a,b)=>b.mon-a.mon);             // 최신 주 먼저
+  const months = Object.keys(byMonth).sort();                              // 오래된 월 → 최근 월(맨 뒤)
+  for (const m of months) byMonth[m].sort((a,b)=>a.mon-b.mon);             // 1주차 → 마지막 주
+  const latestYear = months[months.length-1].slice(0,4);
+  const mLabel = m => `${Number(m.slice(5))}월`;
+  const mYear  = m => m.slice(0,4) !== latestYear ? `${m.slice(0,4)} · ` : '';
 
   const monthsEl = document.getElementById('postMonths');
   const weeksEl  = document.getElementById('postWeeks');
@@ -1231,10 +1239,10 @@ if (POSTS.length) {
   }
   monthsEl.innerHTML = months.map(m => {
     const n = byMonth[m].reduce((a,w)=>a+w.posts.length, 0);
-    return `<button type="button" class="tab" data-m="${m}">${m.slice(0,4)}.${m.slice(5)}<span class="sub">${n}건</span></button>`;
+    return `<button type="button" class="tab" data-m="${m}">${mLabel(m)}<span class="sub">${mYear(m)}${n}건</span></button>`;
   }).join('');
   monthsEl.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
-    showMonth(b.dataset.m); showWeek(byMonth[b.dataset.m][0]);
+    const arr = byMonth[b.dataset.m]; showMonth(b.dataset.m); showWeek(arr[arr.length-1]);
   }));
   showMonth(curMonth);
   showWeek(curWeek);
@@ -1342,22 +1350,32 @@ function kstShort(iso){
   const p = n => String(n).padStart(2,'0');
   return `${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
 }
-function renderJoinLeave(box, src){
+// opts.months / opts.base 가 있으면(채널) 월 탭을 두고, 월 클릭 시 <base><YYYY-MM>.json 을 불러온다.
+// 페이지에는 최근 1000건만 내장 → 최신 월은 내장분으로 즉시 그린 뒤 파일이 오면 전체로 교체.
+function renderJoinLeave(box, src, opts){
   if(!box) return;
-  const jl = (src && src.available) ? (src.events || []) : null;
-  if (jl && jl.length){
-    const jn = jl.filter(e=>e.kind==='join').length;
-    const lv = jl.filter(e=>e.kind==='left').length;
+  const base = (src && src.available) ? (src.events || []) : null;
+  if (base && base.length){
+    const months = (opts && Array.isArray(opts.months)) ? opts.months.slice().sort() : [];
+    const latestYear = months.length ? months[months.length-1].slice(0,4) : '';
+    const mLabel = m => `${Number(m.slice(5))}월` + (m.slice(0,4)!==latestYear ? `<span class="sub">${m.slice(0,4)}</span>` : '');
     box.innerHTML = `
-      <div class="tabs">
-        <button class="tab active" data-f="all">전체 ${jl.length}</button>
-        <button class="tab" data-f="join">유입 ${jn}</button>
-        <button class="tab" data-f="left">이탈 ${lv}</button>
+      ${months.length ? `<div class="tabs jl-months">${months.map(m=>`<button type="button" class="tab" data-m="${m}">${mLabel(m)}</button>`).join('')}</div>` : ''}
+      <div class="tabs jl-kinds">
+        <button class="tab active" data-f="all">전체 <span class="n"></span></button>
+        <button class="tab" data-f="join">유입 <span class="n"></span></button>
+        <button class="tab" data-f="left">이탈 <span class="n"></span></button>
       </div>
+      <div class="jl-note" id="jlNote" hidden></div>
       <div class="table-wrap"><table><thead><tr><th class="l">구분</th><th class="l">멤버</th><th>시각</th></tr></thead><tbody></tbody></table></div>
       <div class="pager"></div>`;
-    const tabs = box.querySelector('.tabs');
+    const tabs = box.querySelector('.jl-kinds');
+    const mtabs = box.querySelector('.jl-months');
+    const note = box.querySelector('#jlNote');
     const body = box.querySelector('tbody'), pager = box.querySelector('.pager');
+    let jl = base, filter = 'all', curM = months.length ? months[months.length-1] : null;
+    const cache = {};
+    function setNote(t){ note.hidden = !t; note.textContent = t || ''; }
     const rowFn = e => {
       const tag = e.kind==='join' ? `<span class="jl-tag join">유입</span>` : `<span class="jl-tag left">이탈</span>`;
       const uname = e.username ? ` <span style="color:var(--ink-300);">@${esc(e.username)}</span>` : '';
@@ -1365,13 +1383,43 @@ function renderJoinLeave(box, src){
       const cell = e.username ? `<a class="ulink" href="https://t.me/${encodeURIComponent(e.username)}" target="_blank" rel="noopener">${label}</a>` : label;
       return `<tr><td class="l">${tag}</td><td class="l">${cell}</td><td>${kstShort(e.date)}</td></tr>`;
     };
-    function apply(f){ paginate(body, pager, f==='all'?jl:jl.filter(e=>e.kind===f), 10, rowFn); }
+    function draw(){
+      const jn = jl.filter(e=>e.kind==='join').length, lv = jl.length - jn;
+      const ns = tabs.querySelectorAll('.n'); ns[0].textContent = fmt(jl.length); ns[1].textContent = fmt(jn); ns[2].textContent = fmt(lv);
+      const items = filter==='all' ? jl : jl.filter(e=>e.kind===filter);
+      if (!items.length){ body.innerHTML = `<tr><td class="l" colspan="3" style="text-align:center;color:var(--ink-300);padding:24px;">기록 없음</td></tr>`; pager.innerHTML=''; return; }
+      paginate(body, pager, items, 10, rowFn);
+    }
     tabs.addEventListener('click', ev=>{
       const t = ev.target.closest('.tab'); if(!t) return;
       tabs.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x===t));
-      apply(t.dataset.f);
+      filter = t.dataset.f; draw();
     });
-    apply('all');
+    async function loadMonth(m){
+      curM = m;
+      mtabs.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.m===m));
+      const isLatest = m === months[months.length-1];
+      if (cache[m]) { jl = cache[m]; setNote(''); draw(); return; }
+      jl = isLatest ? base : []; setNote(isLatest ? '' : '불러오는 중…'); draw();
+      try {
+        const r = await fetch(`${opts.base}${m}.json`, {cache:'no-cache'});
+        if (!r.ok) throw new Error(r.status);
+        const data = await r.json();
+        cache[m] = Array.isArray(data) ? data : [];
+      } catch (e) {
+        if (curM !== m) return;
+        setNote(isLatest ? `월별 파일을 불러오지 못해 최근 ${fmt(base.length)}건만 표시합니다.` : '이 달의 기록 파일을 불러오지 못했습니다.');
+        return;
+      }
+      if (curM !== m) return;
+      jl = cache[m]; setNote(''); draw();
+    }
+    if (mtabs){
+      mtabs.addEventListener('click', ev=>{ const t = ev.target.closest('.tab'); if(t) loadMonth(t.dataset.m); });
+      loadMonth(curM);
+    } else {
+      draw();
+    }
   } else {
     const reason = (src && src.reason) ? esc(src.reason)
       : 'collect.py가 admin log(관리자 권한)에서 유입·이탈 이벤트를 수집하면 표시됩니다. (그룹은 공개링크 가입이 로그에 안 남을 수 있음)';
@@ -1379,7 +1427,7 @@ function renderJoinLeave(box, src){
       <b>유입·이탈 인원 데이터 없음</b><br>${reason}</div>`;
   }
 }
-renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE);
+renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE, {months: JOINLEAVE.months || [], base: "__JLBASE__"});
 // 그룹 유입·이탈은 admin log에 안 남으므로 멤버 명단 스냅샷 diff로 추정.
 // 수집 성공(available)이면 항상 노출하되, 방식의 한계를 캡션으로 안내한다.
 (function(){
@@ -1751,6 +1799,8 @@ def build_channel(ch, favicon):
     official = load_json(d, "broadcast_stats.json", {"available": False})
     members = load_json(d, "group_top_members.json", []) if gr_user else []
     joinleave = load_json(d, "join_leave.json", {"available": False})
+    joinleave["months"] = sorted(p.stem[len("join_leave_"):] for p in d.glob("join_leave_20*.json"))
+    jl_base = "/" + (ch["path"].strip("/") + "/" if ch["path"] else "") + "jl/"
     joinleave_gr = load_json(d, "join_leave_group.json", {"available": False}) if gr_user else {"available": False}
     cobak = load_json(d, "cobak_stats.json", {"available": False}) if ch.get("cobak") else {"available": False}
 
@@ -1765,6 +1815,7 @@ def build_channel(ch, favicon):
             .replace("__CHNAME__", ch["name"])
             .replace("__NAV__", nav)
             .replace("__RAILMID__", rail_mid)
+            .replace("__JLBASE__", jl_base)
             .replace("__CHUSER__", ch_user)
             .replace("__GRUSER__", gr_user)
             .replace("__HAS_GROUP__", "true" if gr_user else "false")

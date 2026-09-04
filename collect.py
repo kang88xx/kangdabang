@@ -2,7 +2,7 @@ import asyncio
 import csv
 import json
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from telethon import TelegramClient
@@ -207,8 +207,39 @@ async def collect_join_leave(client, entity, out_dir, limit=500, history_limit=J
         seen.add(key)
         merged.append(e)
     merged.sort(key=lambda e: e.get("date") or "", reverse=True)
+    months = _append_monthly_join_leave(out_dir, events)
     return {"available": True, "events": merged[:history_limit], "accumulated": True,
-            "new_events": len(events)}
+            "new_events": len(events), "months": months}
+
+
+KST = timezone(timedelta(hours=9))
+JL_MONTH_MAX = 50000       # 월별 파일 1개당 이벤트 상한(폭주 방지)
+
+
+def _append_monthly_join_leave(out_dir, events):
+    """유입·이탈 이벤트를 한국시간 월별 파일(join_leave_YYYY-MM.json)에 무기한 누적.
+    페이지에는 최근 1000건만 내장하고, 월별 파일은 사이트에 정적 JSON으로 같이 배포해
+    월 탭 클릭 시 불러온다. 사용 가능한 월 목록을 반환."""
+    by_month = {}
+    for e in events:
+        try:
+            dt = datetime.fromisoformat(e["date"]).astimezone(KST)
+        except Exception:
+            continue
+        by_month.setdefault(dt.strftime("%Y-%m"), []).append(e)
+    for month, new in by_month.items():
+        name = f"join_leave_{month}.json"
+        old = _load_json(out_dir, name, []) or []
+        seen, merged = set(), []
+        for e in new + old:
+            key = (e.get("id"), e.get("date"), e.get("kind"))
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(e)
+        merged.sort(key=lambda e: e.get("date") or "", reverse=True)
+        write_json(out_dir, name, merged[:JL_MONTH_MAX])
+    return sorted(p.stem[len("join_leave_"):] for p in out_dir.glob("join_leave_20*.json"))
 
 def write_json(out_dir, name, obj):
     (out_dir / name).write_text(json.dumps(obj, ensure_ascii=False, indent=2),
