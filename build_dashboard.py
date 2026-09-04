@@ -1,7 +1,7 @@
 """daily_summary.csv + 최신 channel_posts_*.csv (+ 선택 JSON 사이드카) 를 읽어
 자체 완결형 HTML 대시보드를 생성합니다.
 
-OkardCare Design System v1.0 (Forest/Signal 팔레트, Pretendard + Geist Mono, 사각 코너).
+Toss.im Design System Study 토큰 적용 (grey/blue 팔레트, Toss Product Sans + Pretendard, 12/20px 라운드, pill 탭).
 
 섹션 구성
     01 Overview      — 채널·그룹 핵심 지표 한눈에
@@ -171,111 +171,116 @@ TEMPLATE = r"""<!DOCTYPE html>
 <link rel="apple-touch-icon" href="__FAVICON__">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
+  /* Toss Product Sans — toss.im 공개 웹폰트(스터디 토큰 기준). 실패 시 Pretendard 폴백 */
+  @font-face { font-family:"Toss Product Sans OTF"; src:url("https://static.toss.im/assets/toss-im/font/TossProductSansOTF-Regular.woff2") format("woff2"); font-weight:400; font-display:swap; }
+  @font-face { font-family:"Toss Product Sans OTF"; src:url("https://static.toss.im/assets/toss-im/font/TossProductSansOTF-Medium.woff2") format("woff2"); font-weight:500; font-display:swap; }
+  @font-face { font-family:"Toss Product Sans OTF"; src:url("https://static.toss.im/assets/toss-im/font/TossProductSansOTF-Bold.woff2") format("woff2"); font-weight:700; font-display:swap; }
   :root {
-    --forest-950:#061B14; --forest-900:#0B3A2C; --forest-700:#134C39;
-    --forest-500:#25876A; --forest-300:#8FBFAD; --forest-100:#DCEAE2;
-    --signal:#14B87D; --positive:#1F8A5B; --negative:#C8404E;
-    --info:#2E84AE; --chart-alt:#2E84AE;
-    --ink-900:#14201B; --ink-700:#34433D; --ink-500:#5F6C65; --ink-300:#7E8C84;
-    --paper:#F4F6F2; --white:#FFFFFF; --line:#E3E7DF; --line-soft:#EEF1EC;
+    /* Toss design tokens (observed) — 기존 변수명은 호환을 위해 유지, 값만 재매핑 */
+    --font-sans:"Toss Product Sans OTF","Toss Product Sans","Pretendard","Noto Sans KR",-apple-system,sans-serif;
+    --blue-50:#e8f3ff; --blue-200:#90c2ff; --blue-500:#3182f6; --blue-600:#1b64da;
+    --grey-50:#f9fafb; --grey-100:#f2f4f6; --grey-200:#e5e8eb; --grey-300:#d1d6db; --grey-400:#b0b8c1;
+    --grey-500:#8b95a1; --grey-600:#6b7684; --grey-700:#4e5968; --grey-800:#333d4b; --grey-900:#191f28;
+    --red-500:#f04452; --green-500:#03b26c; --orange-500:#dd7d02;
+    --shell:#f7f8fa;
+    --radius-control:12px; --radius-panel:20px; --radius-pill:100px;
+    --dur-fast:160ms; --dur-medium:280ms; --ease:cubic-bezier(.2,.8,.2,1);
+    /* legacy aliases */
+    --forest-950:#031629; --forest-900:var(--grey-900); --forest-700:var(--blue-600);
+    --forest-500:var(--blue-500); --forest-300:var(--blue-200); --forest-100:var(--blue-50);
+    --signal:var(--blue-500); --positive:var(--green-500); --negative:var(--red-500);
+    --info:var(--blue-500); --chart-alt:var(--blue-200);
+    --ink-900:var(--grey-900); --ink-700:var(--grey-800); --ink-500:var(--grey-600); --ink-300:var(--grey-500);
+    --paper:var(--shell); --white:#FFFFFF; --line:var(--grey-200); --line-soft:var(--grey-100);
   }
   * { box-sizing:border-box; }
   html,body { margin:0; padding:0; background:var(--paper);
     -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
-  body { font-family:'Pretendard',-apple-system,system-ui,sans-serif;
-    color:var(--ink-900); font-feature-settings:'ss01','tnum'; }
+  body { font-family:var(--font-sans); color:var(--grey-800); font-feature-settings:'tnum'; font-size:14px; line-height:1.5; }
   a { color:inherit; }
-  .mono { font-family:'Geist Mono',monospace; font-variant-numeric:tabular-nums; }
-  .eyebrow { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.18em;
-    text-transform:uppercase; color:var(--ink-500); }
+  button, input, select { font-family:inherit; }
+  :focus-visible { outline:2px solid var(--blue-500); outline-offset:2px; }
+  .mono { font-variant-numeric:tabular-nums; }
+  .eyebrow { font-size:12px; font-weight:500; letter-spacing:0; color:var(--grey-600); }
 
   /* CHROME RAIL */
   .rail { position:sticky; top:0; z-index:20;
-    background:#0C3F30; color:rgba(255,255,255,.62);
-    font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.18em;
-    text-transform:uppercase; border-bottom:1px solid rgba(255,255,255,.12); }
-  .rail-in { max-width:1180px; margin:0 auto; padding:9px 64px; display:grid;
-    grid-template-columns:1fr auto 1fr; align-items:center; }
-  .rail .mid { color:#fff; letter-spacing:.05em; white-space:nowrap; }
-  .rail .chlink { color:rgba(255,255,255,.82); text-transform:none; text-decoration:none;
-    border-bottom:1px solid rgba(255,255,255,.28); padding-bottom:1px; transition:color .15s,border-color .15s; }
-  .rail .chlink:hover { color:var(--signal); border-color:var(--signal); }
-  .rail .end { text-align:right; display:flex; gap:12px; align-items:center; justify-content:flex-end; }
+    background:rgba(255,255,255,.94); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    color:var(--grey-700); font-size:13px; border-bottom:1px solid var(--grey-200); }
+  .rail-in { max-width:1180px; margin:0 auto; padding:0 64px; min-height:56px; display:grid;
+    grid-template-columns:auto 1fr auto; gap:16px; align-items:center; }
+  .rail .brand-txt { font-weight:700; font-size:15px; letter-spacing:-.03em; color:var(--grey-900); white-space:nowrap; }
+  .rail .mid { color:var(--grey-700); white-space:nowrap; font-weight:500; text-align:center; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .rail .chlink { color:var(--grey-700); text-decoration:none; transition:color var(--dur-fast) var(--ease); }
+  .rail .chlink:hover { color:var(--blue-500); }
+  .rail .end { text-align:right; display:flex; gap:10px; align-items:center; justify-content:flex-end; color:var(--grey-600); font-size:12.5px; white-space:nowrap; }
+  .rail .end button { white-space:nowrap; }
   .rail .lead { display:flex; align-items:center; gap:14px; min-width:0; }
-  .chnav { display:inline-flex; border:1px solid rgba(255,255,255,.28); }
-  .chnav a { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.04em; text-transform:none;
-    color:rgba(255,255,255,.72); text-decoration:none; padding:4px 11px; white-space:nowrap;
-    transition:background .15s,color .15s; }
-  .chnav a + a { border-left:1px solid rgba(255,255,255,.28); }
-  .chnav a:hover { color:#fff; background:rgba(255,255,255,.08); }
-  .chnav a.active { color:#0C3F30; background:#14B87D; font-weight:600; }
-  .refresh-btn { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.14em;
-    text-transform:uppercase; color:#0C3F30; background:#14B87D; border:none;
-    padding:5px 11px; cursor:pointer; border-radius:0; transition:opacity .15s, background .15s; }
-  .refresh-btn:hover { background:#19d18f; }
+  .chnav { display:inline-flex; gap:2px; padding:3px; background:var(--grey-100); border-radius:var(--radius-pill); }
+  .chnav a { font-size:13px; font-weight:500; color:var(--grey-700); text-decoration:none; padding:5px 13px;
+    white-space:nowrap; border-radius:var(--radius-pill); transition:background var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease); }
+  .chnav a:hover { color:var(--grey-900); }
+  .chnav a.active { color:#fff; background:var(--grey-900); }
+  .refresh-btn { font-size:12.5px; font-weight:500; color:#fff; background:var(--blue-500); border:none;
+    padding:7px 13px; cursor:pointer; border-radius:var(--radius-control); transition:background var(--dur-fast) var(--ease); }
+  .refresh-btn:hover { background:var(--blue-600); }
   .refresh-btn:disabled { opacity:.5; cursor:progress; }
   .refresh-toast { position:fixed; bottom:22px; right:22px; z-index:50;
-    background:#0C3F30; color:#fff; font-family:'Geist Mono',monospace; font-size:12px;
-    letter-spacing:.04em; padding:12px 18px; border-left:3px solid #14B87D;
-    box-shadow:0 8px 28px rgba(0,0,0,.28); max-width:340px; white-space:pre-line; }
-  .refresh-toast.err { border-left-color:#E5484D; }
+    background:var(--grey-900); color:#fff; font-size:13px; padding:12px 16px; border-radius:var(--radius-control);
+    box-shadow:0 8px 28px rgba(25,31,40,.18); max-width:340px; white-space:pre-line; }
+  .refresh-toast.err { background:var(--red-500); }
 
   /* ── 로그인 게이트 ───────────────────────────────────────── */
   /* 잠금 중엔 스크롤만 막고, 본문은 레이아웃을 유지(차트가 0px로 그려지는 문제 방지)한 채
      불투명 오버레이로 가린다. 로그인 성공 시 오버레이만 제거하면 차트가 정상 크기로 보인다. */
   body.auth-lock { overflow:hidden; }
   #authOverlay { position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;
-    background:radial-gradient(120% 120% at 50% 0%, #0B3A2C 0%, #061B14 70%); padding:24px; }
+    background:var(--shell); padding:24px; }
   #authOverlay[hidden] { display:none; }
-  .auth-card { width:100%; max-width:360px; background:var(--white); border:1px solid var(--line);
-    padding:34px 30px 28px; box-shadow:0 24px 60px rgba(0,0,0,.4); }
-  .auth-card .brand { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.18em;
-    text-transform:uppercase; color:var(--signal); margin-bottom:6px; }
-  .auth-card h1 { margin:0 0 4px; font-size:22px; font-weight:600; letter-spacing:-.02em; }
-  .auth-card .sub { font-size:12.5px; color:var(--ink-500); margin-bottom:22px; }
-  .auth-card label { display:block; font-family:'Geist Mono',monospace; font-size:10.5px; letter-spacing:.12em;
-    text-transform:uppercase; color:var(--ink-500); margin:0 0 6px; }
-  .auth-card input { width:100%; padding:11px 12px; font-size:14px; font-family:inherit;
-    border:1px solid var(--line); background:var(--paper); color:var(--ink-900); margin-bottom:16px; }
-  .auth-card input:focus { outline:none; border-color:var(--forest-500); background:#fff; }
-  .auth-card button { width:100%; padding:12px; font-family:'Geist Mono',monospace; font-size:12px;
-    letter-spacing:.12em; text-transform:uppercase; color:#fff; background:var(--forest-900);
-    border:none; cursor:pointer; transition:background .15s; }
-  .auth-card button:hover { background:var(--forest-700); }
+  .auth-card { width:100%; max-width:380px; background:var(--white); border:1px solid var(--line);
+    border-radius:var(--radius-panel); padding:32px 28px 26px; box-shadow:0 20px 60px rgba(25,31,40,.09); }
+  .auth-card .brand { font-size:13px; font-weight:500; color:var(--blue-500); margin-bottom:6px; }
+  .auth-card h1 { margin:0 0 4px; font-size:24px; font-weight:700; letter-spacing:-.02em; color:var(--grey-900); }
+  .auth-card .sub { font-size:14px; color:var(--grey-600); margin-bottom:22px; }
+  .auth-card label { display:block; font-size:13px; font-weight:500; color:var(--grey-700); margin:0 0 6px; }
+  .auth-card input { width:100%; padding:13px 14px; font-size:15px; font-family:inherit; border:1px solid transparent;
+    border-radius:var(--radius-control); background:var(--grey-100); color:var(--grey-900); margin-bottom:14px;
+    transition:border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease); }
+  .auth-card input:focus { outline:none; border-color:var(--blue-500); background:#fff; box-shadow:0 0 0 3px rgba(49,130,246,.12); }
+  .auth-card button { width:100%; min-height:48px; padding:12px; font-size:15px; font-weight:500; color:#fff;
+    background:var(--blue-500); border:none; border-radius:var(--radius-control); cursor:pointer;
+    transition:background var(--dur-fast) var(--ease); margin-top:4px; }
+  .auth-card button:hover { background:var(--blue-600); }
   .auth-card button:disabled { opacity:.55; cursor:progress; }
   .auth-err { color:var(--negative); font-size:12.5px; min-height:18px; margin-bottom:6px; }
 
   /* 상단 계정 칩 + 로그아웃 */
   #userChip { display:flex; gap:9px; align-items:center; }
-  #userChip .who { color:#fff; text-transform:none; letter-spacing:.02em; }
-  #userChip .who b { color:var(--signal); }
-  .logout-btn { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.12em;
-    text-transform:uppercase; color:rgba(255,255,255,.82); background:transparent;
-    border:1px solid rgba(255,255,255,.3); padding:4px 9px; cursor:pointer; transition:all .15s; }
-  .logout-btn:hover { color:#fff; border-color:var(--signal); }
+  #userChip .who { color:var(--grey-800); font-weight:500; }
+  #userChip .who b { color:var(--blue-500); }
+  .logout-btn { font-size:12.5px; font-weight:500; color:var(--grey-800); background:var(--grey-100);
+    border:none; border-radius:var(--radius-control); padding:7px 12px; cursor:pointer; transition:background var(--dur-fast) var(--ease); }
+  .logout-btn:hover { background:var(--grey-200); }
 
   /* ── 07b 접속 로그 (마스터 전용) ─────────────────────────── */
-  .access-foot { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.04em;
-    color:var(--ink-500); margin-top:10px; }
-  .ttag { display:inline-block; font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.08em;
-    text-transform:uppercase; padding:2px 7px; color:#fff; }
-  .ttag.login { background:var(--forest-500); }
-  .ttag.ping { background:var(--info); }
+  .access-foot { font-size:12px; color:var(--grey-600); margin-top:10px; }
+  .ttag { display:inline-block; font-size:12px; font-weight:500; padding:2px 10px; border-radius:var(--radius-pill); }
+  .ttag.login { background:var(--blue-50); color:var(--blue-600); }
+  .ttag.ping { background:var(--grey-100); color:var(--grey-700); }
 
   /* ── 09 내 계정 (일반 계정 전용) ─────────────────────────── */
   .prof-wrap { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; }
-  .prof-card { background:var(--white); border:1px solid var(--line); padding:22px; }
-  .prof-card input { width:100%; padding:11px 12px; font-size:14px; font-family:inherit;
-    border:1px solid var(--line); background:var(--paper); color:var(--ink-900); margin-bottom:12px; }
-  .prof-card input:focus { outline:none; border-color:var(--forest-500); background:#fff; }
+  .prof-card { background:var(--white); border:1px solid var(--line); border-radius:var(--radius-panel); padding:20px 22px; }
+  .prof-card input { width:100%; padding:12px 14px; font-size:14px; font-family:inherit; border:1px solid transparent;
+    border-radius:var(--radius-control); background:var(--grey-100); color:var(--grey-900); margin-bottom:12px; }
+  .prof-card input:focus { outline:none; border-color:var(--blue-500); background:#fff; box-shadow:0 0 0 3px rgba(49,130,246,.12); }
   .prof-card input:disabled { color:var(--ink-300); background:var(--line-soft); cursor:not-allowed; }
-  .prof-btn { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
-    color:#fff; background:var(--forest-900); border:none; padding:9px 16px; cursor:pointer; transition:background .15s; }
-  .prof-btn:hover { background:var(--forest-700); }
+  .prof-btn { font-size:13px; font-weight:500; color:#fff; background:var(--blue-500); border:none;
+    border-radius:var(--radius-control); padding:10px 16px; cursor:pointer; transition:background var(--dur-fast) var(--ease); }
+  .prof-btn:hover { background:var(--blue-600); }
   .prof-btn:disabled { opacity:.5; cursor:not-allowed; }
   .prof-msg { font-size:12.5px; margin-top:10px; min-height:16px; }
   .prof-msg.ok { color:var(--positive); }
@@ -286,67 +291,63 @@ TEMPLATE = r"""<!DOCTYPE html>
   main { max-width:1180px; margin:0 auto; padding:22px 64px 0; }
   section { margin-bottom:34px; scroll-margin-top:58px; }
   #topMembers { scroll-margin-top:58px; }
-  .basis-note { font-family:'Geist Mono',monospace; font-size:11.5px; line-height:1.5; letter-spacing:.01em;
-    color:var(--ink-500); background:var(--white); border:1px solid var(--line); border-left:3px solid var(--signal);
-    padding:8px 14px; margin-bottom:18px; }
-  .basis-note b { color:var(--forest-700); font-weight:600; }
+  .basis-note { font-size:12.5px; line-height:1.5; color:var(--grey-600); background:var(--grey-100);
+    border:none; border-radius:var(--radius-control); padding:9px 14px; margin-bottom:18px; }
+  .basis-note b { color:var(--grey-900); font-weight:500; }
   .week-summary { font-size:14px; line-height:1.5; color:var(--ink-700);
-    background:var(--white); border:1px solid var(--line); border-left:3px solid var(--forest-500);
-    padding:9px 14px; margin-bottom:12px; font-size:13px; }
+    background:var(--blue-50); border:none; border-radius:var(--radius-control);
+    padding:10px 14px; margin-bottom:12px; font-size:13.5px; color:var(--grey-800); }
   .week-summary:empty { display:none; }
-  .week-summary b { font-family:'Geist Mono',monospace; color:var(--forest-700); font-weight:600; }
-  .sec-head { display:flex; align-items:baseline; gap:18px;
-    border-top:1.5px solid var(--ink-900); padding-top:12px; margin-bottom:14px; }
-  .sec-head .num { font-family:'Geist Mono',monospace; font-size:14px; font-weight:500; color:var(--signal); }
-  .sec-head h2 { margin:4px 0 0; font-weight:500; font-size:21px; line-height:1.1; letter-spacing:-.02em; }
+  .week-summary b { color:var(--blue-600); font-weight:700; font-variant-numeric:tabular-nums; }
+  .sec-head { display:flex; align-items:center; gap:18px; margin-bottom:14px; }
+  .sec-head .num { font-size:14px; font-weight:500; color:var(--blue-500); }
+  .sec-head h2 { margin:3px 0 0; font-weight:700; font-size:22px; line-height:1.25; letter-spacing:-.02em; color:var(--grey-900); }
   .group-head .num { color:var(--info); }
 
   /* domain tag */
-  .dtag { display:inline-block; font-family:'Geist Mono',monospace; font-size:10.5px;
-    letter-spacing:.12em; text-transform:uppercase; padding:3px 8px; border:1px solid transparent;
-    color:#fff; margin-left:auto; align-self:center; }
-  .dtag.ch { background:var(--forest-500); border-color:var(--forest-500); }
-  .dtag.gr { background:var(--info); border-color:var(--info); }
-  .dtag.cobak { background:#1652f0; border-color:#1652f0; color:#fff; text-decoration:none; }
+  .dtag { display:inline-flex; align-items:center; min-height:28px; font-size:12.5px; font-weight:500;
+    padding:0 12px; border-radius:var(--radius-pill); margin-left:auto; align-self:center; text-decoration:none;
+    background:var(--blue-50); color:var(--blue-600); border:none; }
+  .dtag.ch { background:var(--blue-50); color:var(--blue-600); }
+  .dtag.gr { background:var(--grey-100); color:var(--grey-700); }
+  .dtag.cobak { background:var(--grey-900); color:#fff; }
 
   /* KPI CARDS */
   .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
-  .card { background:var(--white); border:1px solid var(--line); padding:14px 16px; }
-  .card .label { font-size:12.5px; color:var(--ink-500); }
-  .card .value { font-family:'Geist Mono',monospace; font-variant-numeric:tabular-nums;
-    font-size:26px; font-weight:400; letter-spacing:-.02em; color:var(--ink-900); margin:6px 0 4px; }
-  .card .delta { font-family:'Geist Mono',monospace; font-size:12px; font-weight:500; }
+  .card { background:var(--white); border:1px solid var(--line); border-radius:var(--radius-panel); padding:16px 18px; }
+  .card .label { font-size:13px; font-weight:500; color:var(--grey-600); }
+  .card .value { font-variant-numeric:tabular-nums; font-size:26px; font-weight:700; letter-spacing:-.02em;
+    color:var(--grey-900); margin:6px 0 4px; }
+  .card .delta { font-size:12.5px; font-weight:500; font-variant-numeric:tabular-nums; }
   .up { color:var(--positive); } .down { color:var(--negative); } .flat { color:var(--ink-300); }
   .cards-tight { gap:12px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); }
   .cards-tight .card { padding:11px 13px; }
   .cards-tight .label { font-size:11.5px; line-height:1.3; }
-  .cards-tight .value { font-size:19px; margin:5px 0 0; word-break:break-word; }
-  .datesel { font-family:'Geist Mono',monospace; font-size:12px; text-transform:none; letter-spacing:0;
-    color:var(--ink-900); background:var(--white); border:1px solid var(--line); padding:5px 10px; cursor:pointer; }
-  .datesel:hover { border-color:var(--forest-300); }
-  .quota-chip { margin-left:auto; font-family:'Geist Mono',monospace; font-size:12px; letter-spacing:.02em;
-    text-transform:none; color:var(--forest-700); background:var(--white); border:1px solid var(--line);
-    padding:5px 10px; cursor:pointer; transition:border-color .15s,color .15s; }
-  .quota-chip b { color:var(--signal); font-weight:600; }
-  .quota-chip:hover { border-color:var(--forest-300); color:var(--forest-500); }
+  .cards-tight .value { font-size:20px; margin:5px 0 0; word-break:break-word; }
+  .datesel { font-size:13px; font-weight:500; color:var(--grey-900); background:var(--grey-100); border:1px solid transparent;
+    border-radius:var(--radius-control); padding:6px 10px; cursor:pointer; }
+  .datesel:hover { background:var(--grey-200); }
+  .quota-chip { margin-left:auto; font-size:12.5px; font-weight:500; color:var(--blue-600); background:var(--blue-50);
+    border:none; border-radius:var(--radius-pill); padding:6px 12px; cursor:pointer; transition:background var(--dur-fast) var(--ease); }
+  .quota-chip b { color:var(--blue-600); font-weight:700; font-variant-numeric:tabular-nums; }
+  .quota-chip:hover { background:#d9ebff; }
   .quota-chip.static { cursor:default; }
-  .quota-chip.static:hover { border-color:var(--line); color:var(--forest-700); }
-  .quota-chip .due { color:var(--ink-500); }
+  .quota-chip.static:hover { background:var(--blue-50); }
+  .quota-chip .due { color:var(--grey-600); font-weight:400; }
 
   /* DETAIL BUTTON + MODAL */
-  .card .detail-btn { margin-top:8px; font-family:'Geist Mono',monospace; font-size:10px;
-    letter-spacing:.08em; text-transform:uppercase; color:var(--forest-500); background:none;
-    border:1px solid var(--line); padding:3px 8px; cursor:pointer; transition:background .15s,color .15s,border-color .15s; }
-  .card .detail-btn:hover { background:var(--forest-900); color:#fff; border-color:var(--forest-900); }
-  .modal-back { position:fixed; inset:0; z-index:60; background:rgba(6,27,20,.55);
+  .card .detail-btn { margin-top:8px; font-size:12px; font-weight:500; color:var(--grey-700); background:var(--grey-100);
+    border:none; border-radius:var(--radius-pill); padding:4px 10px; cursor:pointer; transition:background .15s,color .15s,border-color .15s; }
+  .card .detail-btn:hover { background:var(--grey-900); color:#fff; }
+  .modal-back { position:fixed; inset:0; z-index:60; background:rgba(25,31,40,.45);
     display:none; align-items:center; justify-content:center; padding:24px; }
   .modal-back.show { display:flex; }
-  .modal { background:var(--white); border:1px solid var(--line); max-width:540px; width:100%;
-    max-height:82vh; display:flex; flex-direction:column; box-shadow:0 24px 64px rgba(0,0,0,.38); }
+  .modal { background:var(--white); border:1px solid var(--line); border-radius:var(--radius-panel); max-width:540px; width:100%;
+    max-height:82vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(25,31,40,.18); }
   .modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
-    padding:18px 22px; border-bottom:1.5px solid var(--ink-900); }
-  .modal-head h3 { margin:0; font-size:17px; font-weight:600; letter-spacing:-.01em; }
-  .modal-head .sub { font-family:'Geist Mono',monospace; font-size:11px; color:var(--ink-500); margin-top:4px; }
+    padding:18px 22px; border-bottom:1px solid var(--line); }
+  .modal-head h3 { margin:0; font-size:18px; font-weight:700; letter-spacing:-.02em; color:var(--grey-900); }
+  .modal-head .sub { font-size:12.5px; color:var(--grey-600); margin-top:4px; }
   .modal-close { background:none; border:none; font-size:24px; line-height:1; cursor:pointer;
     color:var(--ink-500); padding:0 2px; }
   .modal-close:hover { color:var(--ink-900); }
@@ -364,37 +365,32 @@ TEMPLATE = r"""<!DOCTYPE html>
   .panel-eyebrow .datesel { padding:4px 8px; }
   .sec-head .head-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
   .sec-head .quota-chip { margin-left:0; }
-  .chart-box { background:var(--white); border:1px solid var(--line); padding:14px 16px 10px; min-width:0; }
+  .chart-box { background:var(--white); border:1px solid var(--line); border-radius:var(--radius-panel); padding:14px 18px 10px; min-width:0; }
   .chart-box .eyebrow { margin-bottom:8px; }
   canvas { max-height:196px; max-width:100%; }
 
   /* CHART DETAIL POPUP — 차트 클릭 → 확대 팝업 */
   .chart-box.clickable { cursor:pointer; position:relative; transition:border-color .15s, box-shadow .15s; }
-  .chart-box.clickable:hover, .chart-box.clickable:focus-visible { border-color:var(--forest-500);
-    box-shadow:0 4px 18px rgba(11,58,44,.10); outline:none; }
-  .chart-box.clickable::after { content:'상세보기 ↗'; position:absolute; top:12px; right:16px;
-    font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.12em; text-transform:uppercase;
-    color:var(--forest-500); opacity:0; transition:opacity .15s; pointer-events:none; }
+  .chart-box.clickable:hover, .chart-box.clickable:focus-visible { border-color:var(--blue-500);
+    box-shadow:0 0 0 3px rgba(49,130,246,.12); outline:none; }
+  .chart-box.clickable::after { content:'상세보기'; position:absolute; top:12px; right:14px;
+    font-size:12px; font-weight:500; padding:2px 10px; border-radius:var(--radius-pill); background:var(--blue-50);
+    color:var(--blue-600); opacity:0; transition:opacity var(--dur-fast) var(--ease); pointer-events:none; }
   .chart-box.clickable:hover::after, .chart-box.clickable:focus-visible::after { opacity:1; }
   .modal.modal-wide { max-width:920px; max-height:90vh; }
   .cd-tools { display:flex; align-items:center; justify-content:space-between; gap:12px;
     padding:16px 22px 0; flex-wrap:wrap; }
-  .range-tabs { display:flex; border:1px solid var(--line); }
-  .range-tabs button { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.08em;
-    background:var(--white); border:none; border-right:1px solid var(--line);
-    padding:8px 16px; cursor:pointer; color:var(--ink-500); transition:background .12s,color .12s; }
-  .range-tabs button:last-child { border-right:none; }
-  .range-tabs button:hover:not(.on) { color:var(--forest-700); }
-  .range-tabs button.on { background:var(--forest-900); color:#fff; }
-  .cd-points { font-family:'Geist Mono',monospace; font-size:11px; color:var(--ink-300); }
-  .stat-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
-    background:var(--line-soft); border:1px solid var(--line-soft); margin:16px 22px 0; }
-  .stat-strip .cell { background:var(--paper); padding:13px 15px; min-width:0; }
-  .stat-strip .lb { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.12em;
-    text-transform:uppercase; color:var(--ink-500); margin-bottom:6px; white-space:nowrap;
+  .range-tabs { display:flex; gap:2px; padding:3px; background:var(--grey-100); border-radius:var(--radius-control); }
+  .range-tabs button { font-size:12.5px; font-weight:500; background:transparent; border:none; border-radius:9px;
+    padding:6px 14px; cursor:pointer; color:var(--grey-700); transition:background var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease); }
+  .range-tabs button:hover:not(.on) { color:var(--grey-900); }
+  .range-tabs button.on { background:var(--white); color:var(--grey-900); box-shadow:0 1px 2px rgba(25,31,40,.08); }
+  .cd-points { font-size:12px; color:var(--grey-500); }
+  .stat-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:16px 22px 0; }
+  .stat-strip .cell { background:var(--grey-50); border-radius:var(--radius-control); padding:12px 14px; min-width:0; }
+  .stat-strip .lb { font-size:12px; font-weight:500; color:var(--grey-600); margin-bottom:4px; white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis; }
-  .stat-strip .vl { font-family:'Geist Mono',monospace; font-variant-numeric:tabular-nums;
-    font-size:16px; font-weight:600; color:var(--ink-900); }
+  .stat-strip .vl { font-variant-numeric:tabular-nums; font-size:17px; font-weight:700; color:var(--grey-900); }
   .cd-tools, .stat-strip, .cd-chart { flex-shrink:0; }
   .cd-chart { height:340px; padding:18px 22px 4px; }
   .cd-chart canvas { max-height:320px; }
@@ -405,63 +401,58 @@ TEMPLATE = r"""<!DOCTYPE html>
   #chartModal .modal-body thead th { top:0; }
 
   /* 차트 상세 팝업 — 표 크게 보기 (차트·요약 접고 일자별 표만 크게) */
-  .tbl-toggle { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.08em;
-    background:var(--white); border:1px solid var(--line); padding:8px 14px; cursor:pointer;
-    color:var(--forest-500); transition:background .12s,color .12s,border-color .12s; }
-  .tbl-toggle:hover:not(.on) { border-color:var(--forest-300); color:var(--forest-700); }
-  .tbl-toggle.on { background:var(--forest-900); color:#fff; border-color:var(--forest-900); }
+  .tbl-toggle { font-size:12.5px; font-weight:500; background:var(--grey-100); border:none; border-radius:var(--radius-control);
+    padding:8px 14px; cursor:pointer; color:var(--grey-800); transition:background var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease); }
+  .tbl-toggle:hover:not(.on) { background:var(--grey-200); }
+  .tbl-toggle.on { background:var(--grey-900); color:#fff; }
   #chartModal.tbl .stat-strip, #chartModal.tbl .cd-chart { display:none; }
   #chartModal.tbl .modal-wide { height:90vh; }
 
   /* NOTE / 기준 설명 박스 */
-  .note-box { background:var(--white); border:1px solid var(--line);
-    border-left:3px solid var(--signal); padding:20px 22px; margin-bottom:24px; }
+  .note-box { background:var(--grey-50); border:none; border-radius:var(--radius-panel); padding:20px 22px; margin-bottom:24px; }
   .note-box h4 { margin:0 0 12px; font-size:14px; font-weight:600; letter-spacing:-.01em;
     display:flex; align-items:center; gap:8px; }
   .note-box h4 .ico { color:var(--signal); }
   .note-box dl { margin:0; display:grid; grid-template-columns:max-content 1fr; gap:8px 18px; }
-  .note-box dt { font-family:'Geist Mono',monospace; font-size:12px; color:var(--forest-500);
+  .note-box dt { font-size:12.5px; color:var(--blue-600);
     font-weight:500; white-space:nowrap; }
   .note-box dd { margin:0; font-size:13.5px; line-height:1.55; color:var(--ink-700); }
-  .note-box dd code { font-family:'Geist Mono',monospace; font-size:12px; background:var(--forest-100);
-    padding:1px 5px; color:var(--forest-700); }
+  .note-box dd code { font-family:ui-monospace,Menlo,monospace; font-size:12px; background:var(--blue-50);
+    padding:1px 6px; border-radius:6px; color:var(--blue-600); }
 
   /* TABLE */
-  .table-wrap { background:var(--white); border:1px solid var(--line); overflow-x:auto; }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  thead th { font-family:'Geist Mono',monospace; font-size:10.5px; letter-spacing:.1em;
-    text-transform:uppercase; color:var(--ink-500); text-align:right; padding:9px 12px;
-    border-bottom:1.5px solid var(--ink-900); white-space:nowrap; }
+  .table-wrap { background:var(--white); border:1px solid var(--line); border-radius:var(--radius-panel); overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  thead th { font-size:12px; font-weight:500; color:var(--grey-600); text-align:right; padding:10px 14px;
+    background:var(--grey-50); border-bottom:1px solid var(--line); white-space:nowrap; }
   thead th.l { text-align:left; }
-  tbody td { padding:8px 12px; border-bottom:1px solid var(--line-soft); text-align:right;
-    font-family:'Geist Mono',monospace; font-variant-numeric:tabular-nums; color:var(--ink-700); }
-  tbody td.l { text-align:left; font-family:'Pretendard',sans-serif; }
-  tbody tr:hover { background:var(--paper); }
-  tbody td a.post { color:var(--ink-900); text-decoration:none; font-weight:500;
-    border-bottom:1px solid var(--forest-300); padding-bottom:1px; }
-  tbody td a.post:hover { color:var(--forest-500); border-color:var(--signal); }
-  tbody td a.ulink { color:inherit; text-decoration:none; border-bottom:1px solid var(--line); padding-bottom:1px; }
-  tbody td a.ulink:hover { color:var(--forest-500); border-color:var(--forest-300); }
-  .rank { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px;
-    background:var(--forest-900); color:#fff; font-family:'Geist Mono',monospace; font-size:11px;
-    font-weight:600; margin-right:10px; }
-  .rank.t1 { background:var(--signal); } .rank.t2 { background:var(--forest-500); }
+  tbody td { padding:9px 14px; border-bottom:1px solid var(--line-soft); text-align:right;
+    font-variant-numeric:tabular-nums; color:var(--grey-800); }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody td.l { text-align:left; }
+  tbody tr:hover { background:var(--grey-50); }
+  tbody td a.post { color:var(--grey-900); text-decoration:none; font-weight:500; transition:color var(--dur-fast) var(--ease); }
+  tbody td a.post:hover { color:var(--blue-500); }
+  tbody td a.ulink { color:inherit; text-decoration:none; }
+  tbody td a.ulink:hover { color:var(--blue-500); }
+  .rank { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:22px; padding:0 6px;
+    background:var(--grey-100); color:var(--grey-700); font-size:12px; font-weight:700; border-radius:var(--radius-pill); margin-right:10px; }
+  .rank.t1 { background:var(--blue-500); color:#fff; } .rank.t2 { background:var(--blue-50); color:var(--blue-600); }
 
   /* PAGINATION */
   .pager { display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; justify-content:center; }
-  .pager button { font-family:'Geist Mono',monospace; font-size:11.5px; min-width:30px; padding:4px 8px;
-    border:1px solid var(--line); background:var(--white); color:var(--ink-700); cursor:pointer;
-    transition:background .12s,color .12s,border-color .12s; }
-  .pager button:hover:not(:disabled) { border-color:var(--forest-300); color:var(--forest-700); }
-  .pager button.active { background:var(--forest-900); color:#fff; border-color:var(--forest-900); }
+  .pager button { font-size:12.5px; font-weight:500; min-width:32px; padding:5px 9px; border:none; border-radius:var(--radius-pill);
+    background:var(--grey-100); color:var(--grey-700); cursor:pointer; transition:background var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease); }
+  .pager button:hover:not(:disabled) { background:var(--grey-200); color:var(--grey-900); }
+  .pager button.active { background:var(--grey-900); color:#fff; }
   .pager button:disabled { opacity:.35; cursor:default; }
   .pager .gap { border:none; background:none; cursor:default; color:var(--ink-300); min-width:18px; padding:6px 2px; }
   .tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
-  .tab { font-family:'Geist Mono',monospace; font-size:12px; padding:5px 11px; border:1px solid var(--line);
-    background:var(--white); color:var(--ink-500); cursor:pointer; transition:background .12s,color .12s,border-color .12s; }
-  .tab:hover { border-color:var(--forest-300); }
-  .tab.active { background:var(--forest-900); color:#fff; border-color:var(--forest-900); }
-  .tab .sub { opacity:.6; margin-left:6px; font-size:11px; }
+  .tab { font-size:13px; font-weight:500; padding:6px 13px; border:none; border-radius:var(--radius-pill);
+    background:var(--grey-100); color:var(--grey-700); cursor:pointer; transition:background var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease); }
+  .tab:hover { background:var(--grey-200); color:var(--grey-900); }
+  .tab.active { background:var(--grey-900); color:#fff; }
+  .tab .sub { opacity:.65; margin-left:6px; font-size:11.5px; font-weight:400; }
   .post-months { margin-bottom:6px; }
   .post-months .tab { padding:4px 10px; }
   .post-weeks { margin-bottom:12px; }
@@ -473,24 +464,22 @@ TEMPLATE = r"""<!DOCTYPE html>
   .grid-posts th.num-wide { width:66px; }
   .grid-posts td { white-space:nowrap; }
   .grid-posts td.l { overflow:hidden; text-overflow:ellipsis; }
-  .grid-posts td.l a.post { border-bottom:none; }
-  .jl-tag { display:inline-block; font-family:'Geist Mono',monospace; font-size:11px; padding:2px 8px; font-weight:600; white-space:nowrap; }
-  .jl-tag.join { color:var(--positive); border:1px solid #BFE0CF; }
-  .jl-tag.left { color:var(--negative); border:1px solid #F0C9CD; }
-  .jl-note { font-size:12px; color:var(--ink-300); margin-bottom:12px; line-height:1.5; }
+  .grid-posts td.l a.post { }
+  .jl-tag { display:inline-block; font-size:12px; padding:2px 10px; font-weight:500; white-space:nowrap; border-radius:var(--radius-pill); }
+  .jl-tag.join { color:#02784a; background:rgba(3,178,108,.10); }
+  .jl-tag.left { color:#b8303c; background:rgba(240,68,82,.10); }
+  .jl-note { font-size:12.5px; color:var(--grey-600); margin-bottom:12px; line-height:1.5; }
 
   /* placeholder / empty state */
-  .empty { background:var(--white); border:1px dashed var(--line); padding:18px 20px;
+  .empty { background:var(--grey-50); border:1px dashed var(--grey-300); border-radius:var(--radius-panel); padding:18px 20px;
     text-align:center; color:var(--ink-500); font-size:14px; line-height:1.6; }
   .empty b { color:var(--ink-900); }
-  .empty .tag { display:inline-block; font-family:'Geist Mono',monospace; font-size:11px;
-    letter-spacing:.1em; text-transform:uppercase; color:var(--negative); margin-bottom:10px; }
+  .empty .tag { display:inline-block; font-size:12px; font-weight:500; color:var(--grey-600); margin-bottom:8px; }
 
-  footer { border-top:1.5px solid var(--ink-900); margin-top:8px;
+  footer { border-top:1px solid var(--line); margin-top:8px;
     padding:24px 64px 56px; display:flex; align-items:center; justify-content:space-between;
     flex-wrap:wrap; gap:16px; max-width:1180px; margin-left:auto; margin-right:auto; }
-  footer .note { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.14em;
-    text-transform:uppercase; color:var(--ink-300); }
+  footer .note { font-size:12px; color:var(--grey-500); }
   @media (max-width:760px) { .grid, .grid.grid-side, .grid.grid-auto, .grid.grid-3 { grid-template-columns:1fr; }
     .note-box dl { grid-template-columns:1fr; gap:2px 0; }
     .note-box dt { margin-top:8px; }
@@ -506,10 +495,10 @@ TEMPLATE = r"""<!DOCTYPE html>
     section, #topMembers { scroll-margin-top:54px; }
     .cards-tight { grid-template-columns:repeat(2,minmax(0,1fr)); }
     .basis-note { line-height:1.6; }
-    .eyebrow, .rail, .dtag { letter-spacing:.06em; }
+    .eyebrow, .rail, .dtag { letter-spacing:0; }
     /* D1: 터치 타깃 ≥44px */
     .tab { padding:11px 16px; }
-    .quota-chip { padding:11px 12px; }
+    .quota-chip { padding:9px 12px; }
     .pager button { min-width:44px; padding:11px 12px; }
     .detail-btn { width:100%; padding:12px 10px; text-align:center; }
     .modal-close { width:44px; height:44px; display:flex; align-items:center;
@@ -533,7 +522,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 
   <div id="authOverlay">
     <form class="auth-card" id="authForm" autocomplete="off">
-      <div class="brand">Kangtearoom · Internal</div>
+      <div class="brand">Kangtearoom Data · 내부 전용</div>
       <h1>__CHNAME__ 통계</h1>
       <div class="sub">내부 전용 — 계정으로 로그인하세요.</div>
       <label for="authUser">아이디</label>
@@ -547,7 +536,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 
   <div class="rail">
     <div class="rail-in">
-      <span class="lead"><span class="brand-txt">KANGTEAROOM DATA</span><nav class="chnav" aria-label="채널 선택">__NAV__</nav></span>
+      <span class="lead"><span class="brand-txt">Kangtearoom Data</span><nav class="chnav" aria-label="채널 선택">__NAV__</nav></span>
       <span class="mid">__RAILMID__</span>
       <span class="end"><span id="lastUpdated">최종 업데이트 __GENERATED__ KST</span><button id="refreshBtn" class="refresh-btn" hidden>지금 갱신</button><span id="userChip" hidden><span class="who"></span><button type="button" id="logoutBtn" class="logout-btn">로그아웃</button></span></span>
     </div>
@@ -691,7 +680,7 @@ TEMPLATE = r"""<!DOCTYPE html>
       <div class="cards cards-tight" id="accessCards" style="margin-bottom:12px;"></div>
       <div class="eyebrow" style="margin-bottom:12px;">일자별 접속 횟수 — 계정 탭을 누르면 해당 계정만 (로그인 = 접속, 사용 = 열어둔 동안 5분마다 1회)</div>
       <div class="tabs" id="accessTabs"></div>
-      <div id="accessSummary" style="font-family:'Geist Mono',monospace;font-size:13px;letter-spacing:.01em;color:var(--ink-500);margin:2px 0 16px;min-height:18px;"></div>
+      <div id="accessSummary" style="font-variant-numeric:tabular-nums;font-size:13px;letter-spacing:.01em;color:var(--ink-500);margin:2px 0 16px;min-height:18px;"></div>
       <div class="table-wrap">
         <table><thead><tr>
           <th class="l">날짜</th><th class="l">계정</th><th>로그인</th><th>사용</th><th>마지막 활동</th>
@@ -924,15 +913,16 @@ document.getElementById('reachCards').innerHTML = [
 ].map(c=>`<div class="card"><div class="label">${c.label}${c.wip?wip:''}</div><div class="value">${c.val}</div></div>`).join('');
 
 // ---------- 차트 공통 ----------
-Chart.defaults.color = '#7E8C84';
-Chart.defaults.borderColor = '#EEF1EC';
-Chart.defaults.font.family = "'Geist Mono', monospace";
+Chart.defaults.color = '#8b95a1';
+Chart.defaults.font.family = getComputedStyle(document.documentElement).getPropertyValue('--font-sans') || 'sans-serif';
+Chart.defaults.borderColor = '#f2f4f6';
+Chart.defaults.font.family = "'Toss Product Sans OTF','Pretendard','Noto Sans KR',sans-serif";
 Chart.defaults.font.size = 11;
 const baseOpts = {
   responsive:true, maintainAspectRatio:false,
-  plugins:{legend:{labels:{boxWidth:10,boxHeight:10,font:{size:11},color:'#5F6C65'}}},
-  scales:{ y:{grid:{color:'#EEF1EC'},ticks:{color:'#7E8C84'},border:{color:'#E3E7DF'}},
-           x:{grid:{display:false},ticks:{color:'#7E8C84'},border:{color:'#E3E7DF'}} }
+  plugins:{legend:{labels:{boxWidth:10,boxHeight:10,font:{size:11},color:'#6b7684'}}},
+  scales:{ y:{grid:{color:'#f2f4f6'},ticks:{color:'#8b95a1'},border:{color:'#e5e8eb'}},
+           x:{grid:{display:false},ticks:{color:'#8b95a1'},border:{color:'#e5e8eb'}} }
 };
 const clone = o => JSON.parse(JSON.stringify(o));
 // 차트마다 옵션을 복제해 공유 충돌 방지. 막대는 offset:true 로 양 끝 막대 잘림 방지.
@@ -942,7 +932,7 @@ const L = (label,key,color,fill=false)=>({label,data:DATA.map(r=>r[key]),borderC
   backgroundColor:fill?color+'22':color,tension:.25,pointRadius:2,pointBackgroundColor:color,borderWidth:2,fill});
 
 // 02 구독자
-line('subs', [L('구독자','ch_subscribers','#0B3A2C',true)]);
+line('subs', [L('구독자','ch_subscribers','#3182f6',true)]);
 // 들어옴(+) · 나감(-) — 공식 통계 followers_graph 기반 (없으면 순증·순감으로 폴백)
 const hasFlow = DATA.some(r => r.ch_joined != null || r.ch_left != null);
 if (hasFlow) {
@@ -952,20 +942,20 @@ if (hasFlow) {
   stackOpts.scales.x.stacked = true; stackOpts.scales.y.stacked = true; stackOpts.scales.x.offset = true;
   new Chart(document.getElementById('subsNet'),{type:'bar',
     data:{labels:dates,datasets:[
-      {label:'들어옴',data:joinedArr,backgroundColor:'#1F8A5B',borderRadius:0,stack:'flow'},
-      {label:'나감',data:leftArr,backgroundColor:'#C8404E',borderRadius:0,stack:'flow'},
+      {label:'들어옴',data:joinedArr,backgroundColor:'#03b26c',borderRadius:0,stack:'flow'},
+      {label:'나감',data:leftArr,backgroundColor:'#f04452',borderRadius:0,stack:'flow'},
     ]},options:stackOpts});
 } else {
   const net = DATA.map((r,i)=> (i===0||r.ch_subscribers==null||DATA[i-1].ch_subscribers==null)?null : r.ch_subscribers-DATA[i-1].ch_subscribers);
   new Chart(document.getElementById('subsNet'),{type:'bar',
     data:{labels:dates,datasets:[{label:'순증·순감',data:net,
-      backgroundColor:net.map(v=>v==null?'#E3E7DF':v>=0?'#1F8A5B':'#C8404E'),borderRadius:0}]},
+      backgroundColor:net.map(v=>v==null?'#e5e8eb':v>=0?'#03b26c':'#f04452'),borderRadius:0}]},
     options:(()=>{const o=clone(baseOpts);o.scales.x.offset=true;return o;})()});
 }
 
 // 03 조회/인게이지먼트
-bar('views', [{label:'조회수',data:DATA.map(r=>r.ch_views),backgroundColor:'#25876A',borderRadius:0}]);
-line('engage',[L('공유','ch_forwards','#2E84AE'),L('댓글','ch_replies','#1F8A5B')]);
+bar('views', [{label:'조회수',data:DATA.map(r=>r.ch_views),backgroundColor:'#3182f6',borderRadius:0}]);
+line('engage',[L('공유','ch_forwards','#3182f6'),L('댓글','ch_replies','#90c2ff')]);
 
 // 06 그룹 — KPI 카드(전일대비) + 추이 + 순증·순감 (연결 그룹 있을 때만)
 if (HAS_GROUP) {
@@ -990,13 +980,13 @@ document.getElementById('grCards').innerHTML = grCards.map(c => {
   </div>`;
 }).join('');
 
-line('grMembers',[L('멤버','gr_members','#2E84AE',true)]);
+line('grMembers',[L('멤버','gr_members','#3182f6',true)]);
 const grNet = DATA.map((r,i)=> (i===0||r.gr_members==null||DATA[i-1].gr_members==null)?null : r.gr_members-DATA[i-1].gr_members);
 new Chart(document.getElementById('grNet'),{type:'bar',
   data:{labels:dates,datasets:[{label:'멤버 순증·순감',data:grNet,
-    backgroundColor:grNet.map(v=>v==null?'#E3E7DF':v>=0?'#1F8A5B':'#C8404E'),borderRadius:0}]},
+    backgroundColor:grNet.map(v=>v==null?'#e5e8eb':v>=0?'#03b26c':'#f04452'),borderRadius:0}]},
   options:(()=>{const o=clone(baseOpts);o.scales.x.offset=true;return o;})()});
-line('grActivity',[L('메시지','gr_messages','#2E84AE'),L('활성 유저','gr_active_users','#0B3A2C')]);
+line('grActivity',[L('메시지','gr_messages','#3182f6'),L('활성 유저','gr_active_users','#4e5968')]);
 }
 
 // ---------- 차트 상세 팝업 (차트 클릭 → 확대 + 기간 전환 + 요약 + 일자별 표) ----------
@@ -1004,21 +994,21 @@ line('grActivity',[L('메시지','gr_messages','#2E84AE'),L('활성 유저','gr_
   const CH_TAG = '@__CHUSER__', GR_TAG = '@__GRUSER__';
   const INFO = {
     subs:      {eyebrow:'Channel · Growth', title:'구독자 추이', tag:CH_TAG, kind:'line', cumulative:true,
-                series:[{label:'구독자', key:'ch_subscribers', color:'#0B3A2C', fill:true}]},
+                series:[{label:'구독자', key:'ch_subscribers', color:'#3182f6', fill:true}]},
     subsNet:   hasFlow
       ? {eyebrow:'Channel · Growth', title:'들어옴 · 나감 (일별)', tag:CH_TAG, kind:'flow'}
       : {eyebrow:'Channel · Growth', title:'구독자 순증 · 순감 (일별)', tag:CH_TAG, kind:'net', netKey:'ch_subscribers'},
     views:     {eyebrow:'Channel · Reach', title:'일일 조회수', tag:CH_TAG, kind:'bar',
-                series:[{label:'조회수', key:'ch_views', color:'#25876A'}]},
+                series:[{label:'조회수', key:'ch_views', color:'#3182f6'}]},
     engage:    {eyebrow:'Channel · Reach', title:'공유 · 댓글 (인게이지먼트)', tag:CH_TAG, kind:'line',
-                series:[{label:'공유', key:'ch_forwards', color:'#2E84AE'},
-                        {label:'댓글', key:'ch_replies', color:'#1F8A5B'}]},
+                series:[{label:'공유', key:'ch_forwards', color:'#3182f6'},
+                        {label:'댓글', key:'ch_replies', color:'#90c2ff'}]},
     grMembers: {eyebrow:'Group · Discussion', title:'그룹 멤버 추이', tag:GR_TAG, kind:'line', cumulative:true,
-                series:[{label:'멤버', key:'gr_members', color:'#2E84AE', fill:true}]},
+                series:[{label:'멤버', key:'gr_members', color:'#3182f6', fill:true}]},
     grNet:     {eyebrow:'Group · Discussion', title:'멤버 일별 순증 · 순감', tag:GR_TAG, kind:'net', netKey:'gr_members'},
     grActivity:{eyebrow:'Group · Discussion', title:'메시지 · 활성 유저', tag:GR_TAG, kind:'line',
-                series:[{label:'메시지', key:'gr_messages', color:'#2E84AE'},
-                        {label:'활성 유저', key:'gr_active_users', color:'#0B3A2C'}]},
+                series:[{label:'메시지', key:'gr_messages', color:'#3182f6'},
+                        {label:'활성 유저', key:'gr_active_users', color:'#4e5968'}]},
   };
   const modal = document.getElementById('chartModal');
   if (!modal || typeof Chart === 'undefined') return;
@@ -1044,8 +1034,8 @@ line('grActivity',[L('메시지','gr_messages','#2E84AE'),L('활성 유저','gr_
     if (info.kind === 'flow'){
       const j = rows.map(r=>r.ch_joined), l = rows.map(r=>r.ch_left==null?null:-r.ch_left);
       type = 'bar'; stacked = true;
-      datasets = [{label:'들어옴',data:j,backgroundColor:'#1F8A5B',borderRadius:0,stack:'flow'},
-                  {label:'나감',data:l,backgroundColor:'#C8404E',borderRadius:0,stack:'flow'}];
+      datasets = [{label:'들어옴',data:j,backgroundColor:'#03b26c',borderRadius:0,stack:'flow'},
+                  {label:'나감',data:l,backgroundColor:'#f04452',borderRadius:0,stack:'flow'}];
       const tj = nums(j).reduce((a,b)=>a+b,0), tl = nums(rows.map(r=>r.ch_left)).reduce((a,b)=>a+b,0);
       const net = tj - tl;
       stats = cell('총 들어옴','+'+fmt(tj),'up') + cell('총 나감','-'+fmt(tl),'down')
@@ -1063,7 +1053,7 @@ line('grActivity',[L('메시지','gr_messages','#2E84AE'),L('활성 유저','gr_
       const net = slice(netOf(info.netKey));
       type = 'bar';
       datasets = [{label:'순증·순감',data:net,borderRadius:0,
-        backgroundColor:net.map(v=>v==null?'#E3E7DF':v>=0?'#1F8A5B':'#C8404E')}];
+        backgroundColor:net.map(v=>v==null?'#e5e8eb':v>=0?'#03b26c':'#f04452')}];
       const xs = nums(net), sum = xs.reduce((a,b)=>a+b,0);
       stats = cell('순증감 합계', xs.length?sgn(sum):'—', sum>=0?'up':'down')
         + cell('일평균', xs.length?(sum/xs.length).toFixed(1):'—','')
@@ -1804,20 +1794,20 @@ PLACEHOLDER = """<!DOCTYPE html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__CHNAME__ · Kangtearoom Data</title><link rel="icon" type="image/png" href="__FAVICON__">
 <style>
-  body { margin:0; font-family:-apple-system,'Pretendard','Noto Sans KR',sans-serif; background:#F3F5F1; color:#0B3A2C; }
-  .rail { background:#0C3F30; color:rgba(255,255,255,.62); font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.18em; text-transform:uppercase; }
-  .rail-in { max-width:1180px; margin:0 auto; padding:9px 24px; display:flex; align-items:center; gap:14px; }
-  .chnav { display:inline-flex; border:1px solid rgba(255,255,255,.28); }
-  .chnav a { font-size:11px; letter-spacing:.04em; text-transform:none; color:rgba(255,255,255,.72); text-decoration:none; padding:4px 11px; }
-  .chnav a + a { border-left:1px solid rgba(255,255,255,.28); }
-  .chnav a.active { color:#0C3F30; background:#14B87D; font-weight:600; }
+  body { margin:0; font-family:"Toss Product Sans OTF","Pretendard","Noto Sans KR",-apple-system,sans-serif; background:#f7f8fa; color:#333d4b; }
+  .rail { background:rgba(255,255,255,.94); border-bottom:1px solid #e5e8eb; color:#4e5968; font-size:13px; }
+  .rail-in { max-width:1180px; margin:0 auto; padding:0 24px; min-height:56px; display:flex; align-items:center; gap:14px; }
+  .rail-in > span { font-weight:700; font-size:15px; letter-spacing:-.03em; color:#191f28; }
+  .chnav { display:inline-flex; gap:2px; padding:3px; background:#f2f4f6; border-radius:100px; }
+  .chnav a { font-size:13px; font-weight:500; color:#4e5968; text-decoration:none; padding:5px 13px; border-radius:100px; }
+  .chnav a.active { color:#fff; background:#191f28; }
   main { max-width:640px; margin:80px auto; padding:0 24px; text-align:center; }
-  .tag { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:#5B6B62; }
-  h1 { font-size:22px; margin:12px 0 10px; }
-  p { color:#5B6B62; line-height:1.7; font-size:14px; }
+  .tag { display:inline-block; font-size:12.5px; font-weight:500; color:#1b64da; background:#e8f3ff; padding:4px 12px; border-radius:100px; }
+  h1 { font-size:24px; font-weight:700; letter-spacing:-.02em; color:#191f28; margin:14px 0 10px; }
+  p { color:#6b7684; line-height:1.7; font-size:15px; }
 </style></head>
 <body>
-  <div class="rail"><div class="rail-in"><span>KANGTEAROOM DATA</span><nav class="chnav">__NAV__</nav></div></div>
+  <div class="rail"><div class="rail-in"><span>Kangtearoom Data</span><nav class="chnav">__NAV__</nav></div></div>
   <main>
     <div class="tag">Preparing</div>
     <h1>__CHNAME__ — 데이터 준비 중</h1>
