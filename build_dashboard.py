@@ -283,22 +283,22 @@ TEMPLATE = r"""<!DOCTYPE html>
 
   /* (헤더 cover 제거됨 — 상단 정보는 .rail 로 통합) */
 
-  main { max-width:1180px; margin:0 auto; padding:40px 64px 0; }
-  section { margin-bottom:64px; scroll-margin-top:58px; }
+  main { max-width:1180px; margin:0 auto; padding:22px 64px 0; }
+  section { margin-bottom:34px; scroll-margin-top:58px; }
   #topMembers { scroll-margin-top:58px; }
   .basis-note { font-family:'Geist Mono',monospace; font-size:11.5px; line-height:1.5; letter-spacing:.01em;
     color:var(--ink-500); background:var(--white); border:1px solid var(--line); border-left:3px solid var(--signal);
-    padding:11px 16px; margin-bottom:40px; }
+    padding:8px 14px; margin-bottom:18px; }
   .basis-note b { color:var(--forest-700); font-weight:600; }
   .week-summary { font-size:14px; line-height:1.5; color:var(--ink-700);
     background:var(--white); border:1px solid var(--line); border-left:3px solid var(--forest-500);
-    padding:13px 18px; margin-bottom:20px; }
+    padding:9px 14px; margin-bottom:12px; font-size:13px; }
   .week-summary:empty { display:none; }
   .week-summary b { font-family:'Geist Mono',monospace; color:var(--forest-700); font-weight:600; }
   .sec-head { display:flex; align-items:baseline; gap:18px;
-    border-top:1.5px solid var(--ink-900); padding-top:16px; margin-bottom:28px; }
+    border-top:1.5px solid var(--ink-900); padding-top:12px; margin-bottom:14px; }
   .sec-head .num { font-family:'Geist Mono',monospace; font-size:14px; font-weight:500; color:var(--signal); }
-  .sec-head h2 { margin:6px 0 0; font-weight:500; font-size:26px; line-height:1.1; letter-spacing:-.022em; }
+  .sec-head h2 { margin:4px 0 0; font-weight:500; font-size:21px; line-height:1.1; letter-spacing:-.02em; }
   .group-head .num { color:var(--info); }
 
   /* domain tag */
@@ -310,17 +310,17 @@ TEMPLATE = r"""<!DOCTYPE html>
   .dtag.cobak { background:#1652f0; border-color:#1652f0; color:#fff; text-decoration:none; }
 
   /* KPI CARDS */
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; }
-  .card { background:var(--white); border:1px solid var(--line); padding:22px; }
-  .card .label { font-size:13px; color:var(--ink-500); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
+  .card { background:var(--white); border:1px solid var(--line); padding:14px 16px; }
+  .card .label { font-size:12.5px; color:var(--ink-500); }
   .card .value { font-family:'Geist Mono',monospace; font-variant-numeric:tabular-nums;
-    font-size:32px; font-weight:400; letter-spacing:-.02em; color:var(--ink-900); margin:10px 0 6px; }
-  .card .delta { font-family:'Geist Mono',monospace; font-size:12.5px; font-weight:500; }
+    font-size:26px; font-weight:400; letter-spacing:-.02em; color:var(--ink-900); margin:6px 0 4px; }
+  .card .delta { font-family:'Geist Mono',monospace; font-size:12px; font-weight:500; }
   .up { color:var(--positive); } .down { color:var(--negative); } .flat { color:var(--ink-300); }
   .cards-tight { gap:12px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); }
-  .cards-tight .card { padding:15px 14px; }
+  .cards-tight .card { padding:11px 13px; }
   .cards-tight .label { font-size:11.5px; line-height:1.3; }
-  .cards-tight .value { font-size:21px; margin:8px 0 0; word-break:break-word; }
+  .cards-tight .value { font-size:19px; margin:5px 0 0; word-break:break-word; }
   .datesel { font-family:'Geist Mono',monospace; font-size:12px; text-transform:none; letter-spacing:0;
     color:var(--ink-900); background:var(--white); border:1px solid var(--line); padding:5px 10px; cursor:pointer; }
   .datesel:hover { border-color:var(--forest-300); }
@@ -334,9 +334,9 @@ TEMPLATE = r"""<!DOCTYPE html>
   .quota-chip .due { color:var(--ink-500); }
 
   /* DETAIL BUTTON + MODAL */
-  .card .detail-btn { margin-top:12px; font-family:'Geist Mono',monospace; font-size:10.5px;
+  .card .detail-btn { margin-top:8px; font-family:'Geist Mono',monospace; font-size:10px;
     letter-spacing:.08em; text-transform:uppercase; color:var(--forest-500); background:none;
-    border:1px solid var(--line); padding:5px 10px; cursor:pointer; transition:background .15s,color .15s,border-color .15s; }
+    border:1px solid var(--line); padding:3px 8px; cursor:pointer; transition:background .15s,color .15s,border-color .15s; }
   .card .detail-btn:hover { background:var(--forest-900); color:#fff; border-color:var(--forest-900); }
   .modal-back { position:fixed; inset:0; z-index:60; background:rgba(6,27,20,.55);
     display:none; align-items:center; justify-content:center; padding:24px; }
@@ -354,16 +354,22 @@ TEMPLATE = r"""<!DOCTYPE html>
   .modal-body thead th { position:sticky; top:0; background:var(--white); z-index:1; }
 
   /* CHARTS */
-  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  .chart-box { background:var(--white); border:1px solid var(--line); padding:24px; min-width:0; }
-  .chart-box .eyebrow { margin-bottom:16px; }
-  canvas { max-height:236px; max-width:100%; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  /* 차트 2개(세로) + 목록(우측) · 표 2개 나란히 · 자동 열 */
+  .grid.grid-side { grid-template-columns:1.15fr 1fr; align-items:start; }
+  .grid.grid-auto { grid-template-columns:repeat(auto-fit,minmax(400px,1fr)); align-items:start; }
+  .grid.grid-3 { grid-template-columns:1fr 1fr 1fr; }
+  .stack { display:grid; gap:12px; }
+  .panel-eyebrow { margin-bottom:8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .chart-box { background:var(--white); border:1px solid var(--line); padding:14px 16px 10px; min-width:0; }
+  .chart-box .eyebrow { margin-bottom:8px; }
+  canvas { max-height:196px; max-width:100%; }
 
   /* CHART DETAIL POPUP — 차트 클릭 → 확대 팝업 */
   .chart-box.clickable { cursor:pointer; position:relative; transition:border-color .15s, box-shadow .15s; }
   .chart-box.clickable:hover, .chart-box.clickable:focus-visible { border-color:var(--forest-500);
     box-shadow:0 4px 18px rgba(11,58,44,.10); outline:none; }
-  .chart-box.clickable::after { content:'상세보기 ↗'; position:absolute; top:22px; right:24px;
+  .chart-box.clickable::after { content:'상세보기 ↗'; position:absolute; top:12px; right:16px;
     font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.12em; text-transform:uppercase;
     color:var(--forest-500); opacity:0; transition:opacity .15s; pointer-events:none; }
   .chart-box.clickable:hover::after, .chart-box.clickable:focus-visible::after { opacity:1; }
@@ -419,12 +425,12 @@ TEMPLATE = r"""<!DOCTYPE html>
 
   /* TABLE */
   .table-wrap { background:var(--white); border:1px solid var(--line); overflow-x:auto; }
-  table { width:100%; border-collapse:collapse; font-size:13.5px; }
-  thead th { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.1em;
-    text-transform:uppercase; color:var(--ink-500); text-align:right; padding:14px 16px;
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { font-family:'Geist Mono',monospace; font-size:10.5px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--ink-500); text-align:right; padding:9px 12px;
     border-bottom:1.5px solid var(--ink-900); white-space:nowrap; }
   thead th.l { text-align:left; }
-  tbody td { padding:13px 16px; border-bottom:1px solid var(--line-soft); text-align:right;
+  tbody td { padding:8px 12px; border-bottom:1px solid var(--line-soft); text-align:right;
     font-family:'Geist Mono',monospace; font-variant-numeric:tabular-nums; color:var(--ink-700); }
   tbody td.l { text-align:left; font-family:'Pretendard',sans-serif; }
   tbody tr:hover { background:var(--paper); }
@@ -439,32 +445,39 @@ TEMPLATE = r"""<!DOCTYPE html>
   .rank.t1 { background:var(--signal); } .rank.t2 { background:var(--forest-500); }
 
   /* PAGINATION */
-  .pager { display:flex; flex-wrap:wrap; gap:6px; margin-top:16px; justify-content:center; }
-  .pager button { font-family:'Geist Mono',monospace; font-size:12px; min-width:34px; padding:6px 10px;
+  .pager { display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; justify-content:center; }
+  .pager button { font-family:'Geist Mono',monospace; font-size:11.5px; min-width:30px; padding:4px 8px;
     border:1px solid var(--line); background:var(--white); color:var(--ink-700); cursor:pointer;
     transition:background .12s,color .12s,border-color .12s; }
   .pager button:hover:not(:disabled) { border-color:var(--forest-300); color:var(--forest-700); }
   .pager button.active { background:var(--forest-900); color:#fff; border-color:var(--forest-900); }
   .pager button:disabled { opacity:.35; cursor:default; }
   .pager .gap { border:none; background:none; cursor:default; color:var(--ink-300); min-width:18px; padding:6px 2px; }
-  .tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
-  .tab { font-family:'Geist Mono',monospace; font-size:12px; padding:7px 14px; border:1px solid var(--line);
+  .tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .tab { font-family:'Geist Mono',monospace; font-size:12px; padding:5px 11px; border:1px solid var(--line);
     background:var(--white); color:var(--ink-500); cursor:pointer; transition:background .12s,color .12s,border-color .12s; }
   .tab:hover { border-color:var(--forest-300); }
   .tab.active { background:var(--forest-900); color:#fff; border-color:var(--forest-900); }
   .tab .sub { opacity:.6; margin-left:6px; font-size:11px; }
-  .post-months { margin-bottom:8px; }
-  .post-months .tab { padding:6px 12px; }
-  .post-weeks { margin-bottom:18px; }
-  .jl-months { margin-bottom:8px; }
-  .jl-months .tab { padding:6px 12px; }
-  .jl-tag { display:inline-block; font-family:'Geist Mono',monospace; font-size:11px; padding:2px 8px; font-weight:600; }
+  .post-months { margin-bottom:6px; }
+  .post-months .tab { padding:4px 10px; }
+  .post-weeks { margin-bottom:12px; }
+  .jl-months { margin-bottom:6px; }
+  .jl-months .tab { padding:4px 10px; }
+  /* 포스트 표 2개 나란히: 제목은 한 줄 말줄임(마우스 올리면 전체 제목) */
+  .grid-posts table { table-layout:fixed; }
+  .grid-posts th:not(.l) { width:54px; }
+  .grid-posts th.num-wide { width:66px; }
+  .grid-posts td { white-space:nowrap; }
+  .grid-posts td.l { overflow:hidden; text-overflow:ellipsis; }
+  .grid-posts td.l a.post { border-bottom:none; }
+  .jl-tag { display:inline-block; font-family:'Geist Mono',monospace; font-size:11px; padding:2px 8px; font-weight:600; white-space:nowrap; }
   .jl-tag.join { color:var(--positive); border:1px solid #BFE0CF; }
   .jl-tag.left { color:var(--negative); border:1px solid #F0C9CD; }
   .jl-note { font-size:12px; color:var(--ink-300); margin-bottom:12px; line-height:1.5; }
 
   /* placeholder / empty state */
-  .empty { background:var(--white); border:1px dashed var(--line); padding:28px 24px;
+  .empty { background:var(--white); border:1px dashed var(--line); padding:18px 20px;
     text-align:center; color:var(--ink-500); font-size:14px; line-height:1.6; }
   .empty b { color:var(--ink-900); }
   .empty .tag { display:inline-block; font-family:'Geist Mono',monospace; font-size:11px;
@@ -475,7 +488,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     flex-wrap:wrap; gap:16px; max-width:1180px; margin-left:auto; margin-right:auto; }
   footer .note { font-family:'Geist Mono',monospace; font-size:11px; letter-spacing:.14em;
     text-transform:uppercase; color:var(--ink-300); }
-  @media (max-width:760px) { .grid { grid-template-columns:1fr; }
+  @media (max-width:760px) { .grid, .grid.grid-side, .grid.grid-auto, .grid.grid-3 { grid-template-columns:1fr; }
     .note-box dl { grid-template-columns:1fr; gap:2px 0; }
     .note-box dt { margin-top:8px; }
     .rail-in, main, footer { padding-left:24px; padding-right:24px; }
@@ -558,12 +571,16 @@ TEMPLATE = r"""<!DOCTYPE html>
         <span class="dtag ch">@__CHUSER__</span>
       </div>
 
-      <div class="grid">
-        <div class="chart-box"><div class="eyebrow">구독자 추이</div><canvas id="subs"></canvas></div>
-        <div class="chart-box"><div class="eyebrow">들어옴 · 나감 (일별)</div><canvas id="subsNet"></canvas></div>
+      <div class="grid grid-side">
+        <div class="stack">
+          <div class="chart-box"><div class="eyebrow">구독자 추이</div><canvas id="subs"></canvas></div>
+          <div class="chart-box"><div class="eyebrow">들어옴 · 나감 (일별)</div><canvas id="subsNet"></canvas></div>
+        </div>
+        <div>
+          <div class="eyebrow panel-eyebrow">유입 · 이탈 인원 (누가)</div>
+          <div id="joinLeave"></div>
+        </div>
       </div>
-      <div class="eyebrow" style="margin:28px 0 12px;">유입 · 이탈 인원 (누가)</div>
-      <div id="joinLeave"></div>
     </section>
 
     <!-- 03 CHANNEL 조회 -->
@@ -573,7 +590,7 @@ TEMPLATE = r"""<!DOCTYPE html>
         <span class="dtag ch">@__CHUSER__</span>
       </div>
 
-      <div class="cards" id="reachCards" style="margin-bottom:16px;"></div>
+      <div class="cards cards-tight" id="reachCards" style="margin-bottom:12px;"></div>
       <div class="grid">
         <div class="chart-box"><div class="eyebrow">일일 조회수</div><canvas id="views"></canvas></div>
         <div class="chart-box"><div class="eyebrow">공유 · 댓글 (인게이지먼트)</div><canvas id="engage"></canvas></div>
@@ -588,23 +605,30 @@ TEMPLATE = r"""<!DOCTYPE html>
       </div>
       <div class="tabs post-months" id="postMonths"></div>
       <div class="tabs post-weeks" id="postWeeks"></div>
-      <div class="eyebrow" style="margin-bottom:12px;">TOP 게시물 — <span id="topWeekLabel">선택한 주</span> 조회수 순 (제목 클릭 시 텔레그램에서 열림)</div>
-      <div class="table-wrap" style="margin-bottom:28px;">
-        <table><thead><tr>
-          <th class="l">#  게시물</th><th>날짜</th><th>조회수</th><th>공유</th><th>댓글</th>
-        </tr></thead><tbody id="topPosts"></tbody></table>
+      <div class="grid grid-posts" style="align-items:start;">
+        <div>
+          <div class="eyebrow panel-eyebrow">TOP 게시물 — <span id="topWeekLabel">선택한 주</span> 조회수 순</div>
+          <div class="table-wrap">
+            <table><thead><tr>
+              <th class="l">#  게시물</th><th>날짜</th><th class="num-wide">조회수</th><th>공유</th><th>댓글</th>
+            </tr></thead><tbody id="topPosts"></tbody></table>
+          </div>
+        </div>
+        <div>
+          <div class="eyebrow panel-eyebrow">
+            <span>게시물 목록 — <span id="listWeekLabel">선택한 주</span></span>
+            <select id="postDate" class="datesel"></select>
+            <button type="button" id="quotaChip" class="quota-chip" title="클릭하면 일자별 사용 내역" hidden>남은횟수: <b>—</b></button>
+          </div>
+          <div class="table-wrap">
+            <table><thead><tr>
+              <th class="l">게시물</th><th class="num-wide">시각</th><th class="num-wide">조회수</th><th>공유</th><th>댓글</th>
+            </tr></thead><tbody id="allPosts"></tbody></table>
+          </div>
+          <div class="pager" id="allPostsPager"></div>
+        </div>
       </div>
-      <div class="eyebrow" style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <span>게시물 목록 — <span id="listWeekLabel">선택한 주</span></span>
-        <select id="postDate" class="datesel"></select>
-        <button type="button" id="quotaChip" class="quota-chip" title="클릭하면 일자별 사용 내역" hidden>남은횟수: <b>—</b></button>
-      </div>
-      <div class="table-wrap">
-        <table><thead><tr>
-          <th class="l">게시물</th><th>시각</th><th>조회수</th><th>공유</th><th>댓글</th>
-        </tr></thead><tbody id="allPosts"></tbody></table>
-      </div>
-      <div class="pager" id="allPostsPager"></div>
+      <div class="jl-note" style="margin-top:8px;">제목은 한 줄로 줄여 표시됩니다 — 마우스를 올리면 전체 제목, 클릭하면 텔레그램에서 열립니다.</div>
     </section>
 
     <!-- 05 CHANNEL 공식 통계 -->
@@ -623,17 +647,19 @@ TEMPLATE = r"""<!DOCTYPE html>
         <span class="dtag gr">@__GRUSER__</span>
       </div>
 
-      <div class="cards" id="grCards" style="margin-bottom:16px;"></div>
-      <div class="grid" style="margin-bottom:16px;">
+      <div class="cards cards-tight" id="grCards" style="margin-bottom:12px;"></div>
+      <div class="grid grid-3" style="margin-bottom:12px;">
         <div class="chart-box"><div class="eyebrow">그룹 멤버 추이</div><canvas id="grMembers"></canvas></div>
         <div class="chart-box"><div class="eyebrow">멤버 일별 순증 · 순감</div><canvas id="grNet"></canvas></div>
         <div class="chart-box"><div class="eyebrow">메시지 · 활성 유저</div><canvas id="grActivity"></canvas></div>
       </div>
-      <div id="topMembers"></div>
-      <div id="grJoinLeaveWrap" hidden>
-        <div class="eyebrow" style="margin:28px 0 12px;">유입 · 이탈 인원 (누가)</div>
-        <div id="grJlNote" class="jl-note"></div>
-        <div id="joinLeaveGroup"></div>
+      <div class="grid grid-auto">
+        <div id="topMembers"></div>
+        <div id="grJoinLeaveWrap" hidden>
+          <div class="eyebrow panel-eyebrow">유입 · 이탈 인원 (누가)</div>
+          <div id="joinLeaveGroup"></div>
+          <div id="grJlNote" class="jl-note" style="margin-top:8px;"></div>
+        </div>
       </div>
     </section>
 
@@ -643,7 +669,7 @@ TEMPLATE = r"""<!DOCTYPE html>
         <div><div class="eyebrow">Community · Cobak</div><h2>코박 활동 — 캉다방</h2></div>
         <a class="dtag cobak" id="cobakTag" href="https://cobak.co/" target="_blank" rel="noopener">cobak.co</a>
       </div>
-      <div class="cards" id="cobakCards" style="margin-bottom:24px;"></div>
+      <div class="cards cards-tight" id="cobakCards" style="margin-bottom:12px;"></div>
       <div class="tabs post-months" id="cobakMonths"></div>
       <div class="eyebrow" style="margin-bottom:12px;">게시글 목록 — <span id="cobakMonthLabel">선택한 달</span> 최신순 · 5개씩 (제목 클릭 시 코박에서 열림)</div>
       <div class="table-wrap">
@@ -660,7 +686,7 @@ TEMPLATE = r"""<!DOCTYPE html>
         <div><div class="eyebrow">Admin · Access</div><h2>접속 로그 — 사용 현황</h2></div>
         <button type="button" id="logRefresh" class="dtag" style="background:var(--ink-900);border:none;cursor:pointer;">새로고침</button>
       </div>
-      <div class="cards cards-tight" id="accessCards" style="margin-bottom:20px;"></div>
+      <div class="cards cards-tight" id="accessCards" style="margin-bottom:12px;"></div>
       <div class="eyebrow" style="margin-bottom:12px;">일자별 접속 횟수 — 계정 탭을 누르면 해당 계정만 (로그인 = 접속, 사용 = 열어둔 동안 5분마다 1회)</div>
       <div class="tabs" id="accessTabs"></div>
       <div id="accessSummary" style="font-family:'Geist Mono',monospace;font-size:13px;letter-spacing:.01em;color:var(--ink-500);margin:2px 0 16px;min-height:18px;"></div>
@@ -1193,15 +1219,15 @@ if (POSTS.length) {
   const topRow = (p,i) => `
     <tr>
       <td class="l"><span class="rank ${i===0?'t1':i===1?'t2':''}">${i+1}</span>
-        <a class="post" href="${link(p.id)}" target="_blank" rel="noopener">${esc(p.text)}</a></td>
+        <a class="post" href="${link(p.id)}" target="_blank" rel="noopener" title="${esc(p.text)}">${esc(p.text)}</a></td>
       <td>${p.date.slice(5)}</td>
       <td>${fmt(p.views)}</td>
       <td>${fmt(p.forwards)}</td><td>${fmt(p.replies)}</td>
     </tr>`;
   const listRow = p => `
     <tr>
-      <td class="l"><a class="post" href="${link(p.id)}" target="_blank" rel="noopener">${esc(p.text)}</a></td>
-      <td style="white-space:nowrap;">${p.date.slice(5)} ${p.time}</td>
+      <td class="l"><a class="post" href="${link(p.id)}" target="_blank" rel="noopener" title="${esc(p.text)}">${esc(p.text)}</a></td>
+      <td style="white-space:nowrap;" title="${p.date}">${sel.value === '__week' ? p.date.slice(5) + ' ' : ''}${p.time}</td>
       <td>${fmt(p.views)}</td>
       <td>${fmt(p.forwards)}</td><td>${fmt(p.replies)}</td>
     </tr>`;
@@ -1462,7 +1488,7 @@ renderJoinLeave(document.getElementById('joinLeave'), JOINLEAVE, {months: JOINLE
   const box = document.getElementById('topMembers');
   if (!box) return;
   if (MEMBERS && MEMBERS.length) {
-    box.innerHTML = `<div class="eyebrow" style="margin-bottom:12px;">활발한 멤버 — 발화 수 순 (전체 ${MEMBERS.length}명)</div>
+    box.innerHTML = `<div class="eyebrow panel-eyebrow">활발한 멤버 — 발화 수 순 (전체 ${MEMBERS.length}명)</div>
       <div class="table-wrap"><table><thead><tr><th class="l">#  멤버</th><th>발화 수</th></tr></thead><tbody id="tmBody"></tbody></table></div>
       <div class="pager" id="tmPager"></div>`;
     paginate(document.getElementById('tmBody'), document.getElementById('tmPager'), MEMBERS, 10,
